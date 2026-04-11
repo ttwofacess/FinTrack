@@ -527,7 +527,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 // ============================================================
-// EXPORT
+// IMPORT / EXPORT
 // ============================================================
 document.getElementById('btn-export').addEventListener('click', () => {
   const data = JSON.stringify(STATE, null, 2);
@@ -537,6 +537,44 @@ document.getElementById('btn-export').addEventListener('click', () => {
   a.download = `fintrack-${CUR_YEAR}.json`;
   a.click();
   showToast('✓ Datos exportados');
+});
+
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('input-import').click();
+});
+
+document.getElementById('input-import').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const importedData = JSON.parse(ev.target.result);
+      // Validación básica
+      if (importedData.gastos && importedData.ingresos && importedData.budgets) {
+        STATE = importedData;
+        setState(STATE);
+        renderDashboard();
+        showToast('✓ Datos importados');
+      } else {
+        showToast('❌ Formato JSON inválido');
+      }
+    } catch (err) {
+      showToast('❌ Error al leer el archivo');
+    }
+    e.target.value = ''; // Limpiar el input
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('btn-reset-data').addEventListener('click', () => {
+  if (confirm('¿Estás seguro de que quieres eliminar TODOS los datos? Esta acción es permanente.')) {
+    STATE = defaultState();
+    setState(STATE);
+    renderDashboard();
+    showToast('🗑️ Datos eliminados');
+  }
 });
 
 // ============================================================
