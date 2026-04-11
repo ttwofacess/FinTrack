@@ -568,6 +568,15 @@ document.getElementById('input-import').addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
+document.getElementById('btn-reset-data').addEventListener('click', () => {
+  if (confirm('¿Estás seguro de que quieres eliminar TODOS los datos? Esta acción es permanente.')) {
+    STATE = defaultState();
+    setState(STATE);
+    renderDashboard();
+    showToast('🗑️ Datos eliminados');
+  }
+});
+
 // ============================================================
 // INIT
 // ============================================================
