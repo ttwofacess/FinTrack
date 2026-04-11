@@ -17,7 +17,11 @@
         <div class="header-title"><span class="logo-dot"></span>FinTrack</div>
         <div class="header-sub">control de gastos personal</div>
       </div>
-      <div class="pill" id="btn-export">exportar</div>
+      <div style="display: flex; gap: 8px;">
+        <div class="pill" id="btn-import">importar</div>
+        <div class="pill" id="btn-export">exportar</div>
+      </div>
+      <input type="file" id="input-import" accept=".json" style="display:none">
     </div>
 
     <!-- Month selector -->
