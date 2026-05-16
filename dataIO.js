@@ -6,6 +6,7 @@
 
 import { CUR_YEAR } from './constants.js';
 import { showToast } from './ui.js';
+import { validateGasto, validateIngreso } from './utils.js';
 
 /**
  * Descarga el estado actual como JSON.
@@ -21,6 +22,40 @@ export function exportData(state) {
 }
 
 /**
+ * Deep-validates an imported state object.
+ * Returns { ok: boolean, errors: string[] }.
+ */
+function validateImportedState(data) {
+  const errors = [];
+
+  if (!Array.isArray(data.gastos))   errors.push('gastos debe ser un array.');
+  if (!Array.isArray(data.ingresos)) errors.push('ingresos debe ser un array.');
+  if (typeof data.budgets !== 'object' || data.budgets === null) errors.push('budgets debe ser un objeto.');
+
+  if (errors.length) return { ok: false, errors };
+
+  // Validate individual gastos — skip malformed entries and report them
+  const badGastos = data.gastos.filter(g => {
+    const r = validateGasto(g);
+    return !r.ok;
+  });
+  if (badGastos.length > 0) {
+    errors.push(`${badGastos.length} gasto(s) con datos inválidos fueron encontrados.`);
+  }
+
+  // Validate individual ingresos
+  const badIngresos = data.ingresos.filter(i => {
+    const r = validateIngreso(i);
+    return !r.ok;
+  });
+  if (badIngresos.length > 0) {
+    errors.push(`${badIngresos.length} ingreso(s) con datos inválidos fueron encontrados.`);
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+/**
  * Lee un archivo JSON e invoca onSuccess con los datos si son válidos.
  * @param {File}     file
  * @param {Function} onSuccess — (importedState) => void
@@ -31,11 +66,14 @@ export function importData(file, onSuccess) {
   reader.onload  = (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (data.gastos && data.ingresos && data.budgets) {
+      const validation = validateImportedState(data);
+      if (validation.ok) {
         onSuccess(data);
         showToast('✓ Datos importados');
       } else {
-        showToast('❌ Formato JSON inválido');
+        // Show the first error; log all for debugging
+        console.warn('[importData] Validation errors:', validation.errors);
+        showToast('❌ ' + validation.errors[0]);
       }
     } catch {
       showToast('❌ Error al leer el archivo');

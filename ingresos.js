@@ -5,7 +5,7 @@
 // ============================================================
 
 import { MESES, CUR_YEAR } from './constants.js';
-import { fmt, uid, ingresosByMonth, totalIngresosMonth } from './utils.js';
+import { fmt, uid, ingresosByMonth, totalIngresosMonth, validateIngreso } from './utils.js';
 import { buildMonthSelector, closeModals, showToast } from './ui.js';
 
 /**
@@ -77,17 +77,22 @@ export function initIngresoModal(getState, onSave) {
   });
 
   document.getElementById('btn-save-ingreso').addEventListener('click', () => {
-    const desc    = document.getElementById('fi-desc').value.trim();
-    const importe = parseFloat(document.getElementById('fi-importe').value);
-    const mes     = parseInt(document.getElementById('fi-mes').value);
-    const tipo    = document.getElementById('fi-tipo').value;
+    const raw = {
+      descripcion : document.getElementById('fi-desc').value,
+      importe     : document.getElementById('fi-importe').value,
+      mes         : document.getElementById('fi-mes').value,
+      tipo        : document.getElementById('fi-tipo').value,
+    };
 
-    if (!desc || isNaN(importe) || importe <= 0) {
-      showToast('Completá descripción e importe');
+    const result = validateIngreso(raw);
+    if (!result.ok) {
+      showToast(result.errors[0]);
       return;
     }
-    onSave({ id: uid(), descripcion: desc, importe, mes, tipo });
+
+    onSave({ id: uid(), ...result.data });
     closeModals();
     showToast('✓ Ingreso guardado');
   });
 }
+
