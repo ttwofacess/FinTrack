@@ -7,7 +7,7 @@
 // ============================================================
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
-import { fmt, catInfo, gastosByMonth, uid } from './utils.js';
+import { fmt, catInfo, gastosByMonth, uid, validateGasto } from './utils.js';
 import { buildMonthSelector, closeModals, showToast, gastoItemHTML } from './ui.js';
 
 let gastoFilter   = 'all';
@@ -104,18 +104,21 @@ function _populateGastoForm(selectedMonth) {
 /** Registra los listeners del modal (llamar una sola vez en init) */
 export function initGastoModal(getState, onSave, onDelete) {
   document.getElementById('btn-save-gasto').addEventListener('click', () => {
-    const detalle   = document.getElementById('f-detalle').value.trim();
-    const importe   = parseFloat(document.getElementById('f-importe').value);
-    const mes       = parseInt(document.getElementById('f-mes').value);
-    const categoria = document.getElementById('f-categoria').value;
-    const medio     = document.getElementById('f-medio').value;
+    const raw = {
+      detalle   : document.getElementById('f-detalle').value,
+      importe   : document.getElementById('f-importe').value,
+      mes       : document.getElementById('f-mes').value,
+      categoria : document.getElementById('f-categoria').value,
+      medio     : document.getElementById('f-medio').value,
+    };
 
-    if (!detalle || isNaN(importe) || importe <= 0) {
-      showToast('Completá detalle e importe');
+    const result = validateGasto(raw);
+    if (!result.ok) {
+      showToast(result.errors[0]);   // show the first error; expand to show all if desired
       return;
     }
 
-    const gasto = { detalle, importe, mes, categoria, medio };
+    const gasto = result.data;
     if (editingGastoId) {
       onSave({ ...gasto, id: editingGastoId, _edit: true });
     } else {

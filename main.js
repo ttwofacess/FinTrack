@@ -12,6 +12,7 @@ import { renderGastos, initGastoModal, openNewGasto, openEditGasto } from './gas
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
 import { renderIngresos, initIngresoModal }          from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
+import { validateGasto, validateIngreso }           from './utils.js';
 
 // ── Estado global ──────────────────────────────────────────
 let STATE = getState();
@@ -49,15 +50,24 @@ function onMonthChange(mi) {
 
 // ── Callbacks de gastos ──────────────────────────────────
 function onGastoSave(gasto) {
-  if (gasto._edit) {
-    const idx = STATE.gastos.findIndex(g => g.id === gasto.id);
+  // Defensive re-validation (data should already be clean from the modal)
+  const { _edit, id, ...fields } = gasto;
+  const result = validateGasto(fields);
+  if (!result.ok) {
+    console.warn('[onGastoSave] Invalid gasto rejected:', result.errors, gasto);
+    return;
+  }
+  const clean = { ...result.data, id, _edit };
+
+  if (clean._edit) {
+    const idx = STATE.gastos.findIndex(g => g.id === clean.id);
     if (idx >= 0) {
-      const { _edit, ...clean } = gasto;
-      STATE.gastos[idx] = { ...STATE.gastos[idx], ...clean };
+      const { _edit: _, ...toSave } = clean;
+      STATE.gastos[idx] = { ...STATE.gastos[idx], ...toSave };
     }
   } else {
-    const { _edit, ...clean } = gasto;
-    STATE.gastos.push(clean);
+    const { _edit: _, ...toSave } = clean;
+    STATE.gastos.push(toSave);
   }
   saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
@@ -73,7 +83,13 @@ function onGastoDelete(id) {
 
 // ── Callbacks de ingresos ────────────────────────────────
 function onIngresoSave(ingreso) {
-  STATE.ingresos.push(ingreso);
+  const { id, ...fields } = ingreso;
+  const result = validateIngreso(fields);
+  if (!result.ok) {
+    console.warn('[onIngresoSave] Invalid ingreso rejected:', result.errors, ingreso);
+    return;
+  }
+  STATE.ingresos.push({ id, ...result.data });
   saveS();
   renderIngresos(STATE, onMonthChange);
 }
