@@ -77,6 +77,32 @@ export function sanitizeEnum(value, allowedValues) {
   return allowedValues.includes(value) ? value : allowedValues[0];
 }
 
+export const MAX_BUDGET_AMOUNT = 999_999_999;
+
+/**
+ * Validates a budget update object.
+ * @param {object} updates — { catKey: rawValue }
+ * @returns {{ ok: boolean, errors: string[], data?: object }}
+ */
+export function validateBudgetUpdate(updates) {
+  const errors = [];
+  const cleanData = {};
+
+  for (const [catKey, value] of Object.entries(updates)) {
+    const amount = sanitizeImporte(value);
+    if (isNaN(amount) || amount < 0) {
+      errors.push(`El budget para "${catKey}" debe ser un número positivo.`);
+    } else if (amount > MAX_BUDGET_AMOUNT) {
+      errors.push(`El budget para "${catKey}" es demasiado alto.`);
+    } else {
+      cleanData[catKey] = amount;
+    }
+  }
+
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true, errors: [], data: cleanData };
+}
+
 // ── Validation ──────────────────────────────────────────────
 
 const VALID_MEDIOS     = ['efectivo', 'débito', 'crédito', 'transferencia', 'otro'];
