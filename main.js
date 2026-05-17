@@ -12,7 +12,7 @@ import { renderGastos, initGastoModal, openNewGasto, openEditGasto } from './gas
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
 import { renderIngresos, initIngresoModal }          from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
-import { validateGasto, validateIngreso }           from './utils.js';
+import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
 
 // ── Estado global ──────────────────────────────────────────
 let STATE = getState();
@@ -96,8 +96,14 @@ function onIngresoSave(ingreso) {
 
 // ── Callbacks de presupuesto ─────────────────────────────
 function onBudgetSave(mi, updates) {
+  const result = validateBudgetUpdate(updates);
+  if (!result.ok) {
+    console.warn('[onBudgetSave] Invalid budget rejected:', result.errors, updates);
+    return;
+  }
+
   if (!STATE.budgets[mi]) STATE.budgets[mi] = {};
-  Object.assign(STATE.budgets[mi], updates);
+  Object.assign(STATE.budgets[mi], result.data);
   saveS();
   renderPresupuesto(STATE, onMonthChange, onBudgetSave);
 }

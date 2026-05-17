@@ -5,7 +5,7 @@
 // ============================================================
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
-import { fmt, ingresosByMonth, totalIngresosMonth, gastoByCat } from './utils.js';
+import { fmt, ingresosByMonth, totalIngresosMonth, gastoByCat, validateBudgetUpdate } from './utils.js';
 import { buildMonthSelector, showToast } from './ui.js';
 
 let presupTab = 'fijos';
@@ -91,17 +91,36 @@ export function openEditPresup(state, onBudgetSave) {
         <div class="presup-info"><div class="presup-name">${c.label}</div></div>
         <div>
           <input class="form-input" data-cat="${c.key}" value="${budgets[c.key] || 0}"
-                 type="number" style="width:110px;text-align:right;padding:8px 10px">
+                 type="number" min="0" step="0.01" style="width:110px;text-align:right;padding:8px 10px">
         </div>
       </div>`).join('') +
     `<div style="padding:12px 0 4px"><button class="btn-primary" id="btn-save-presup">Guardar Budget</button></div>`;
 
   document.getElementById('btn-save-presup').addEventListener('click', () => {
-    const updates = {};
+    const rawUpdates = {};
     el.querySelectorAll('input[data-cat]').forEach(inp => {
-      updates[inp.dataset.cat] = parseFloat(inp.value) || 0;
+      rawUpdates[inp.dataset.cat] = inp.value;
     });
-    onBudgetSave(mi, updates);
+
+    const result = validateBudgetUpdate(rawUpdates);
+
+    if (!result.ok) {
+      showToast('❌ ' + result.errors[0]);
+      // Focus the first invalid input (using the key from the first error if possible, but simplest is to find first data-cat)
+      // Actually, validateBudgetUpdate returns errors with catKey in the string.
+      // We can just find the first input that matches one of the failed keys if we had them.
+      // For now, let's just focus the first input that has an error.
+      const firstErrorCat = Object.keys(rawUpdates).find(cat => {
+          const val = parseFloat(rawUpdates[cat]);
+          return isNaN(val) || val < 0 || val > 999999999; // Sync with validateBudgetUpdate logic
+      });
+      if (firstErrorCat) {
+          el.querySelector(`input[data-cat="${firstErrorCat}"]`)?.focus();
+      }
+      return;
+    }
+
+    onBudgetSave(mi, result.data);
     showToast('✓ Budget guardado');
   });
 }

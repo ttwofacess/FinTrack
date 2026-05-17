@@ -6,7 +6,7 @@
 
 import { CUR_YEAR } from './constants.js';
 import { showToast } from './ui.js';
-import { validateGasto, validateIngreso } from './utils.js';
+import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
 
 /**
  * Descarga el estado actual como JSON.
@@ -50,6 +50,19 @@ function validateImportedState(data) {
   });
   if (badIngresos.length > 0) {
     errors.push(`${badIngresos.length} ingreso(s) con datos inválidos fueron encontrados.`);
+  }
+
+  // Validate budgets
+  for (const [mi, updates] of Object.entries(data.budgets)) {
+    const monthIndex = parseInt(mi, 10);
+    if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+      errors.push(`Mes inválido en budgets: ${mi}`);
+      continue;
+    }
+    const r = validateBudgetUpdate(updates);
+    if (!r.ok) {
+      errors.push(`Presupuesto inválido para el mes ${monthIndex}: ${r.errors[0]}`);
+    }
   }
 
   return { ok: errors.length === 0, errors };
