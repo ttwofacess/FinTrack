@@ -7,6 +7,7 @@
 import { CUR_YEAR } from './constants.js';
 import { showToast } from './ui.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
+import { normalizeState } from './store.js';
 
 /**
  * Descarga el estado actual como JSON.
@@ -26,16 +27,17 @@ export function exportData(state) {
  * Returns { ok: boolean, errors: string[] }.
  */
 function validateImportedState(data) {
+  const normalized = normalizeState(data);
   const errors = [];
 
-  if (!Array.isArray(data.gastos))   errors.push('gastos debe ser un array.');
-  if (!Array.isArray(data.ingresos)) errors.push('ingresos debe ser un array.');
-  if (typeof data.budgets !== 'object' || data.budgets === null) errors.push('budgets debe ser un objeto.');
+  if (!Array.isArray(normalized.gastos))   errors.push('gastos debe ser un array.');
+  if (!Array.isArray(normalized.ingresos)) errors.push('ingresos debe ser un array.');
+  if (typeof normalized.budgets !== 'object' || normalized.budgets === null) errors.push('budgets debe ser un objeto.');
 
-  if (errors.length) return { ok: false, errors };
+  if (errors.length) return { ok: false, errors, data: normalized };
 
   // Validate individual gastos — skip malformed entries and report them
-  const badGastos = data.gastos.filter(g => {
+  const badGastos = normalized.gastos.filter(g => {
     const r = validateGasto(g);
     return !r.ok;
   });
@@ -44,7 +46,7 @@ function validateImportedState(data) {
   }
 
   // Validate individual ingresos
-  const badIngresos = data.ingresos.filter(i => {
+  const badIngresos = normalized.ingresos.filter(i => {
     const r = validateIngreso(i);
     return !r.ok;
   });
@@ -53,7 +55,7 @@ function validateImportedState(data) {
   }
 
   // Validate budgets
-  for (const [mi, updates] of Object.entries(data.budgets)) {
+  for (const [mi, updates] of Object.entries(normalized.budgets)) {
     const monthIndex = parseInt(mi, 10);
     if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
       errors.push(`Mes inválido en budgets: ${mi}`);
@@ -65,7 +67,7 @@ function validateImportedState(data) {
     }
   }
 
-  return { ok: errors.length === 0, errors };
+  return { ok: errors.length === 0, errors, data: normalized };
 }
 
 /**
@@ -81,7 +83,7 @@ export function importData(file, onSuccess) {
       const data = JSON.parse(ev.target.result);
       const validation = validateImportedState(data);
       if (validation.ok) {
-        onSuccess(data);
+        onSuccess(validation.data);
         showToast('✓ Datos importados');
       } else {
         // Show the first error; log all for debugging

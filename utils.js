@@ -40,6 +40,56 @@ export function totalIngresosMonth(state, mi) {
   return ingresosByMonth(state, mi).reduce((s, g) => s + (g.importe || 0), 0);
 }
 
+// ── Credit Card & Cash Logic ───────────────────────────────
+
+/** Gastos que impactan en el efectivo/débito del mes actual */
+export function cashGastosByMonth(state, mi) {
+  // Incluye todo excepto lo pagado con crédito
+  return gastosByMonth(state, mi).filter(g => g.medio !== 'credito');
+}
+
+/** Gastos realizados con tarjeta de crédito en el mes */
+export function creditGastosByMonth(state, mi) {
+  return gastosByMonth(state, mi).filter(g => g.medio === 'credito');
+}
+
+/** Pagos realizados a la tarjeta (categoría pay_card) */
+export function cardPaymentsByMonth(state, mi) {
+  return gastosByMonth(state, mi).filter(g => g.categoria === 'pay_card');
+}
+
+export function totalCashGastosMonth(state, mi) {
+  return cashGastosByMonth(state, mi).reduce((s, g) => s + (g.importe || 0), 0);
+}
+
+export function totalCreditGastosMonth(state, mi) {
+  return creditGastosByMonth(state, mi).reduce((s, g) => s + (g.importe || 0), 0);
+}
+
+export function totalCardPaymentsMonth(state, mi) {
+  return cardPaymentsByMonth(state, mi).reduce((s, g) => s + (g.importe || 0), 0);
+}
+
+/** 
+ * Calcula la deuda de tarjeta acumulada al FINAL de un mes.
+ * Es una función recursiva o acumulativa. 
+ */
+export function getCardDebtAtEnd(state, mi) {
+  let debt = 0;
+  for (let i = 0; i <= mi; i++) {
+    const purchases = totalCreditGastosMonth(state, i);
+    const payments = totalCardPaymentsMonth(state, i);
+    debt = Math.max(0, debt + purchases - payments);
+  }
+  return debt;
+}
+
+/** Deuda que viene del mes anterior */
+export function getCardDebtAtStart(state, mi) {
+  if (mi === 0) return 0;
+  return getCardDebtAtEnd(state, mi - 1);
+}
+
 export function totalBudgetMonth(state, mi) {
   const b = state.budgets[mi] || {};
   return Object.values(b).reduce((s, v) => s + (v || 0), 0);
@@ -105,8 +155,8 @@ export function validateBudgetUpdate(updates) {
 
 // ── Validation ──────────────────────────────────────────────
 
-const VALID_MEDIOS     = ['efectivo', 'débito', 'crédito', 'transferencia', 'otro'];
-const VALID_TIPOS_ING  = ['sueldo', 'freelance', 'inversión', 'regalo', 'otro'];
+const VALID_MEDIOS     = ['efectivo', 'debito', 'credito', 'transferencia', 'otro'];
+const VALID_TIPOS_ING  = ['sueldo', 'aguinaldo', 'freelance', 'inversiones', 'otros'];
 
 /**
  * Validates a gasto object.
