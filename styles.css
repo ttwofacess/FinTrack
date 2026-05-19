@@ -139,6 +139,10 @@ body {
 .balance-month { font-size: 0.75rem; color: var(--text2); font-family: var(--mono); }
 .balance-row { display: flex; gap: 16px; margin-top: 20px; }
 .balance-item { flex: 1; }
+@media (max-width: 460px) {
+  .balance-row { flex-wrap: wrap; }
+  .balance-item { flex: 0 0 calc(50% - 8px); }
+}
 .balance-item .bi-label { font-size: 0.65rem; color: var(--text2); font-family: var(--mono); letter-spacing: 0.5px; }
 .balance-item .bi-value { font-size: 1.05rem; font-weight: 700; margin-top: 3px; }
 .bi-value.inc { color: var(--green); }
