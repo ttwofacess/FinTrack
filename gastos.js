@@ -24,13 +24,9 @@ export function renderGastos(state, onMonthChange, onSave, onDelete) {
   buildMonthSelector('gastos-months', mi, (i) => { gastoFilter = 'all'; onMonthChange(i); });
 
   const gastos = gastosByMonth(state, mi);
-  const total  = gastos.reduce((s, g) => s + g.importe, 0);
-
-  document.getElementById('gastos-count').textContent      = gastos.length + ' registros';
-  document.getElementById('gastos-total-pill').textContent = fmt(total) + ' total';
-
+  
   _renderFilters(gastos, state, onMonthChange, onSave, onDelete);
-  _renderList(gastos, onSave, onDelete);
+  _renderList(gastos, state, onSave, onDelete);
 }
 
 function _renderFilters(gastos, state, onMonthChange, onSave, onDelete) {
@@ -39,6 +35,7 @@ function _renderFilters(gastos, state, onMonthChange, onSave, onDelete) {
 
   filterEl.innerHTML =
     `<div class="filter-chip ${gastoFilter === 'all' ? 'active' : ''}" data-cat="all">Todos</div>` +
+    `<div class="filter-chip ${gastoFilter === 'credito' ? 'active' : ''}" data-cat="credito">💳 Crédito</div>` +
     cats.map(c => {
       const ci = catInfo(c);
       return `<div class="filter-chip ${gastoFilter === c ? 'active' : ''}" data-cat="${c}">${ci.icon} ${ci.label}</div>`;
@@ -52,17 +49,27 @@ function _renderFilters(gastos, state, onMonthChange, onSave, onDelete) {
   });
 }
 
-function _renderList(gastos, onSave, onDelete) {
-  const filtered = gastoFilter === 'all' ? gastos : gastos.filter(g => g.categoria === gastoFilter);
+function _renderList(gastos, state, onSave, onDelete) {
+  let filtered = gastos;
+  if (gastoFilter === 'credito') {
+    filtered = gastos.filter(g => g.medio === 'credito');
+  } else if (gastoFilter !== 'all') {
+    filtered = gastos.filter(g => g.categoria === gastoFilter);
+  }
+  
+  const total = filtered.reduce((s, g) => s + g.importe, 0);
+  document.getElementById('gastos-count').textContent      = filtered.length + ' registros';
+  document.getElementById('gastos-total-pill').textContent = fmt(total) + ' total';
+
   const listEl   = document.getElementById('gastos-list');
 
   if (filtered.length === 0) {
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">💳</div>Sin gastos este mes<br>Tocá + para agregar uno</div>';
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">💳</div>Sin gastos para este filtro</div>';
     return;
   }
   listEl.innerHTML = [...filtered].reverse().map(g => gastoItemHTML(g, catInfo, fmt)).join('');
   listEl.querySelectorAll('.gasto-item').forEach(el => {
-    el.addEventListener('click', () => openEditGasto(el.dataset.id, onSave, onDelete));
+    el.addEventListener('click', () => openEditGasto(el.dataset.id, state, onSave, onDelete));
   });
 }
 

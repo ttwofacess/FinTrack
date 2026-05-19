@@ -19,6 +19,7 @@ export const CAT_FIJOS = [
   { key:'ahorro',        label:'Ahorro',          icon:'💰', color:'#4ade80' },
   { key:'suscripciones', label:'Suscripciones',   icon:'📱', color:'#60a5fa' },
   { key:'seguro',        label:'Seguro',          icon:'🛡️', color:'#a78bfa' },
+  { key:'pay_card',      label:'Pago Tarjeta',    icon:'💳', color:'#6366f1' },
 ];
 
 export const CAT_VARIABLES = [

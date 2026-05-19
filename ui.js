@@ -60,11 +60,13 @@ export function syncAllMonthSelectors(selectedMonth) {
 /** HTML de un ítem de gasto (usado en lista y dashboard) */
 export function gastoItemHTML(g, catInfoFn, fmtFn) {
   const ci = catInfoFn(g.categoria);
+  const medioLabel = g.medio === 'credito' ? '💳 crédito' : (g.medio || 'efectivo');
+
   return `<div class="gasto-item" data-id="${g.id}">
     <div class="gasto-icon" style="background:${ci.color}22">${ci.icon}</div>
     <div class="gasto-info">
       <div class="gasto-name">${g.detalle}</div>
-      <div class="gasto-meta">${ci.label} · ${g.medio || 'efectivo'}</div>
+      <div class="gasto-meta">${ci.label} · ${medioLabel}</div>
     </div>
     <div class="gasto-amount" style="color:${ci.color}">${fmtFn(g.importe)}</div>
   </div>`;

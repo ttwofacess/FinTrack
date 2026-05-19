@@ -5,7 +5,10 @@
 // ============================================================
 
 import { MESES, CUR_YEAR, ALL_CATS } from './constants.js';
-import { fmt, catInfo, gastosByMonth, totalIngresosMonth, totalGastosMonth, totalBudgetMonth, gastoByCat } from './utils.js';
+import { 
+  fmt, catInfo, gastosByMonth, totalIngresosMonth, 
+  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardDebtAtEnd 
+} from './utils.js';
 import { buildMonthSelector, gastoItemHTML } from './ui.js';
 
 /**
@@ -18,9 +21,10 @@ export function renderDashboard(state, onMonthChange, onEditGasto) {
   buildMonthSelector('dash-months', mi, onMonthChange);
 
   const ingresos = totalIngresosMonth(state, mi);
-  const gastos   = totalGastosMonth(state, mi);
+  const cashGastos = totalCashGastosMonth(state, mi);
   const presup   = totalBudgetMonth(state, mi);
-  const balance  = ingresos - gastos;
+  const debt     = getCardDebtAtEnd(state, mi);
+  const balance  = ingresos - cashGastos;
 
   // Balance hero
   const balEl = document.getElementById('dash-balance');
@@ -28,10 +32,11 @@ export function renderDashboard(state, onMonthChange, onEditGasto) {
   balEl.className = 'balance-amount ' + (balance >= 0 ? 'positive' : 'negative');
   document.getElementById('dash-month-name').textContent = MESES[mi] + ' ' + CUR_YEAR;
   document.getElementById('dash-ingresos').textContent = fmt(ingresos);
-  document.getElementById('dash-gastos').textContent   = fmt(gastos);
+  document.getElementById('dash-gastos').textContent   = fmt(cashGastos);
   document.getElementById('dash-presup').textContent   = fmt(presup);
+  document.getElementById('dash-debt').textContent     = fmt(debt);
 
-  _renderBadges(gastos, ingresos, mi, state);
+  _renderBadges(cashGastos, ingresos, mi, state);
   _renderBarChart(mi, state);
   _renderBudgetVsReal(mi, state);
   _renderRecientes(mi, state, onEditGasto);
