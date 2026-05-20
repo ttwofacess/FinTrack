@@ -1,0 +1,10 @@
+.summary-badges { display: flex; gap: 8px; padding: 8px 16px; flex-wrap: wrap; }
+.badge {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 100px;
+}
+.badge-icon { font-size: 1rem; }
+.badge-right {}
+.badge-val { font-size: 0.9rem; font-weight: 700; font-family: var(--mono); }
+.badge-lbl { font-size: 0.6rem; font-family: var(--mono); color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }

@@ -1,0 +1,20 @@
+:root {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #1a1a24;
+  --bg4: #222232;
+  --border: #2a2a3a;
+  --text: #e8e8f0;
+  --text2: #8888aa;
+  --text3: #4444aa;
+  --accent: #7c6dfa;
+  --accent2: #fa6d9a;
+  --accent3: #6dfad0;
+  --accent4: #fad06d;
+  --green: #4ade80;
+  --red: #f87171;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --font: 'Syne', sans-serif;
+  --mono: 'DM Mono', monospace;
+}

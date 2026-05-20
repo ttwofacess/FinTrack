@@ -1,0 +1,28 @@
+/* main.css — import order matters */
+
+/* Base */
+@import './base/tokens.css';
+@import './base/reset.css';
+@import './base/animations.css';
+
+/* Layout */
+@import './layout/app.css';
+@import './layout/scrollbar.css';
+
+/* Components */
+@import './components/header.css';
+@import './components/bottom-nav.css';
+@import './components/card.css';
+@import './components/balance-hero.css';
+@import './components/charts.css';
+@import './components/fab.css';
+@import './components/gastos-list.css';
+@import './components/filter-chips.css';
+@import './components/modal.css';
+@import './components/form.css';
+@import './components/tabs.css';
+@import './components/presupuesto.css';
+@import './components/ingreso.css';
+@import './components/badge.css';
+@import './components/toast.css';
+@import './components/utilities.css';

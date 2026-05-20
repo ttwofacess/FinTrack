@@ -1,0 +1,11 @@
+.filter-row { display: flex; gap: 6px; overflow-x: auto; padding: 8px 16px; scrollbar-width: none; }
+.filter-row::-webkit-scrollbar { display: none; }
+.filter-chip {
+  flex-shrink: 0; padding: 5px 12px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 20px; color: var(--text2);
+  font-family: var(--mono); font-size: 0.68rem;
+  cursor: pointer; transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-chip.active { border-color: var(--accent2); color: var(--accent2); background: rgba(250,109,154,0.08); }
