@@ -1,0 +1,17 @@
+.ingreso-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; }
+.ingreso-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px;
+}
+.ingreso-label { font-size: 0.65rem; font-family: var(--mono); color: var(--text2); letter-spacing: 0.5px; text-transform: uppercase; }
+.ingreso-value { font-size: 1.1rem; font-weight: 700; margin-top: 5px; }
+.ingreso-month-label { font-size: 0.68rem; font-family: var(--mono); color: var(--accent); margin-top: 3px; }
+
+.ingreso-list-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 16px; border-bottom: 1px solid var(--border);
+}
+.ili-left .ili-name { font-size: 0.85rem; font-weight: 600; }
+.ili-left .ili-type { font-size: 0.65rem; font-family: var(--mono); color: var(--text2); margin-top: 2px; }
+.ili-amount { font-size: 0.9rem; font-weight: 700; font-family: var(--mono); color: var(--green); }
+.ili-budget { font-size: 0.65rem; font-family: var(--mono); color: var(--text2); text-align: right; margin-top: 2px; }

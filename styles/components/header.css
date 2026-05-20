@@ -1,0 +1,20 @@
+.header {
+  padding: 20px 20px 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-title { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+.header-sub { font-size: 0.75rem; color: var(--text2); font-family: var(--mono); margin-top: 2px; }
+.logo-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: middle; box-shadow: 0 0 12px var(--accent); }
+
+.pill {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .2s;
+}
+.pill:hover { border-color: var(--accent); color: var(--accent); }
