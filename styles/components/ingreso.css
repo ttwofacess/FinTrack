@@ -1,4 +1,4 @@
-.ingreso-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; }
+.ingreso-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px; margin-top: 12px; }
 .ingreso-card {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 14px;
