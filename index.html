@@ -18,9 +18,12 @@
         <div class="header-title"><span class="logo-dot"></span>FinTrack</div>
         <div class="header-sub">control de gastos personal</div>
       </div>
-      <div style="display: flex; gap: 8px;">
-        <div class="pill" id="btn-import">importar</div>
-        <div class="pill" id="btn-export">exportar</div>
+      <div class="header-actions">
+        <div class="header-main-actions">
+          <div class="pill" id="btn-import">importar</div>
+          <div class="pill" id="btn-export">exportar</div>
+        </div>
+        <button class="pill donate-pill" id="btn-donate" type="button" aria-haspopup="dialog" aria-controls="modal-donate">donar</button>
       </div>
       <input type="file" id="input-import" accept=".json" style="display:none">
     </div>
@@ -230,6 +233,40 @@
         </select>
       </div>
       <button class="btn-primary" id="btn-save-ingreso">Guardar Ingreso</button>
+    </div>
+  </div>
+
+  <!-- MODAL DONAR -->
+  <div class="modal-overlay" id="modal-donate" role="dialog" aria-modal="true" aria-labelledby="donate-title">
+    <div class="modal donate-modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="donate-title">Donar</div>
+      <div class="crypto-options">
+        <div class="crypto-option">
+          <div class="crypto-icon">₿</div>
+          <div class="crypto-info">
+            <span class="crypto-name">Bitcoin</span>
+            <input class="crypto-address" type="text" value="bc1qxz4nxj8rzxzsnwj8u4rq46wy8dnf5h7yvzaqs2" readonly>
+          </div>
+          <button class="copy-button" type="button">Copiar</button>
+        </div>
+        <div class="crypto-option">
+          <div class="crypto-icon">Ł</div>
+          <div class="crypto-info">
+            <span class="crypto-name">Litecoin</span>
+            <input class="crypto-address" type="text" value="M8snytUjZP13KVTEHA4JCbHfy31Ve2xMr4" readonly>
+          </div>
+          <button class="copy-button" type="button">Copiar</button>
+        </div>
+        <div class="crypto-option">
+          <div class="crypto-icon">$</div>
+          <div class="crypto-info">
+            <span class="crypto-name">USDT (TRC20)</span>
+            <input class="crypto-address" type="text" value="TYsPkPyHbWN8cPuoDA7DohwhAdXWkVbQHm" readonly>
+          </div>
+          <button class="copy-button" type="button">Copiar</button>
+        </div>
+      </div>
     </div>
   </div>
 

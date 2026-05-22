@@ -12,6 +12,7 @@ import { renderGastos, initGastoModal, openNewGasto, openEditGasto } from './gas
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
 import { renderIngresos, initIngresoModal }          from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
+import { initDonateModal }                           from './donate.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
 
 // ── Estado global ──────────────────────────────────────────
@@ -137,6 +138,7 @@ document.getElementById('fab').addEventListener('click', () => openNewGasto(STAT
 initGastoModal(getS, onGastoSave, onGastoDelete);
 initIngresoModal(getS, onIngresoSave);
 initPresupuestoEvents(getS, onMonthChange, onBudgetSave);
+initDonateModal();
 
 // ── Arranque ─────────────────────────────────────────────
 navigate('dashboard');
