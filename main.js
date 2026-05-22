@@ -22,6 +22,41 @@ let STATE = getState();
 const getS  = () => STATE;
 const saveS = () => setState(STATE);
 
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .catch((error) => {
+        console.warn('[FinTrack] Service worker registration failed:', error);
+      });
+  });
+}
+
+function initInstallElement() {
+  const installButton = document.getElementById('btn-install-app');
+  if (!installButton) return;
+
+  installButton.addEventListener('promptaction', () => {
+    showToast('FinTrack instalado');
+  });
+
+  installButton.addEventListener('promptdismiss', () => {
+    showToast('Instalacion cancelada');
+  });
+
+  installButton.addEventListener('validationstatuschanged', (event) => {
+    const reason = event.target?.invalidReason;
+    if (reason) console.warn('[FinTrack] Install validation status:', reason);
+  });
+
+  if (!('HTMLInstallElement' in window)) {
+    installButton.querySelector('button')?.addEventListener('click', () => {
+      showToast('Instala FinTrack desde el menu del navegador');
+    });
+  }
+}
+
 // ── Navegación ────────────────────────────────────────────
 function navigate(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -139,6 +174,8 @@ initGastoModal(getS, onGastoSave, onGastoDelete);
 initIngresoModal(getS, onIngresoSave);
 initPresupuestoEvents(getS, onMonthChange, onBudgetSave);
 initDonateModal();
+initInstallElement();
 
 // ── Arranque ─────────────────────────────────────────────
+registerServiceWorker();
 navigate('dashboard');

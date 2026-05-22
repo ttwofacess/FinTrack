@@ -42,3 +42,19 @@
   border-color: var(--accent4);
   box-shadow: 0 0 18px rgba(250, 208, 109, 0.18);
 }
+
+install {
+  display: block;
+}
+
+.install-pill {
+  color: var(--accent2);
+  border-color: rgba(110, 231, 183, 0.35);
+  background: rgba(110, 231, 183, 0.08);
+}
+
+.install-pill:hover {
+  color: var(--accent2);
+  border-color: var(--accent2);
+  box-shadow: 0 0 18px rgba(110, 231, 183, 0.16);
+}
