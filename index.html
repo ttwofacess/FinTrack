@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FinTrack · Control de Gastos</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6c63ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FinTrack">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles/main.css">
 </head>
@@ -23,6 +29,9 @@
           <div class="pill" id="btn-import">importar</div>
           <div class="pill" id="btn-export">exportar</div>
         </div>
+        <install id="btn-install-app">
+          <button class="pill install-pill" type="button">instalar</button>
+        </install>
         <button class="pill donate-pill" id="btn-donate" type="button" aria-haspopup="dialog" aria-controls="modal-donate">donar</button>
       </div>
       <input type="file" id="input-import" accept=".json" style="display:none">
