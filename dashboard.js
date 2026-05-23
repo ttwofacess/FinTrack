@@ -52,7 +52,7 @@ function _renderBadges(gastos, ingresos, mi, state) {
       <div class="badge-icon">📊</div>
       <div class="badge-right">
         <div class="badge-val" style="color:var(--accent4)">${txCount}</div>
-        <div class="badge-lbl">transacciones</div>
+        <div class="badge-lbl">transac.</div>
       </div>
     </div>
     <div class="badge">
