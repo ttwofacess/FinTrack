@@ -44,6 +44,13 @@ function registerServiceWorker() {
   });
 }
 
+let refreshing = false;
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (refreshing) return;
+  refreshing = true;
+  window.location.reload();
+});
+
 function initInstallButton() {
   const installButton = document.getElementById('btn-install-app');
   const innerButton = installButton?.querySelector('button');
