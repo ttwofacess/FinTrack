@@ -59,6 +59,11 @@ window.addEventListener('beforeinstallprompt', (event) => {
   document.getElementById('btn-install-app')?.removeAttribute('hidden');
 });
 
+window.addEventListener('appinstalled', () => {
+  document.getElementById('btn-install-app')?.setAttribute('hidden', '');
+  deferredInstallPrompt = null;
+});
+
 // ── Navegación ────────────────────────────────────────────
 function navigate(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
