@@ -8,11 +8,28 @@
 import { MESES } from './constants.js';
 
 /** Muestra un toast temporario */
-export function showToast(msg) {
+export function showToast(msg, options = {}) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  t.textContent = '';
+  
+  const text = document.createElement('span');
+  text.textContent = msg;
+  t.appendChild(text);
+  
+  if (options.actionLabel && options.onAction) {
+    const btn = document.createElement('button');
+    btn.textContent = options.actionLabel;
+    btn.className = 'toast-action';
+    btn.addEventListener('click', () => {
+      options.onAction();
+      t.classList.remove('show');
+    });
+    t.appendChild(btn);
+  }
+  
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2200);
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.remove('show'), options.duration || 5000);
 }
 
 /** Cierra todos los modales */

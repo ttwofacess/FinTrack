@@ -33,7 +33,10 @@ function registerServiceWorker() {
           const newWorker = registration.installing;
           newWorker?.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              showToast('Nueva versión disponible. Recargá para actualizar.');
+              showToast('Nueva versión disponible', {
+                actionLabel: 'Actualizar',
+                onAction: () => newWorker.postMessage({ type: 'SKIP_WAITING' })
+              });
             }
           });
         });
