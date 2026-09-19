@@ -34,28 +34,23 @@ function registerServiceWorker() {
   });
 }
 
-function initInstallElement() {
+function initInstallButton() {
   const installButton = document.getElementById('btn-install-app');
-  if (!installButton) return;
+  const innerButton = installButton?.querySelector('button');
+  if (!installButton || !innerButton) return;
 
-  installButton.addEventListener('promptaction', () => {
-    showToast('FinTrack instalado');
+  innerButton.addEventListener('click', async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      if (outcome === 'accepted') showToast('FinTrack instalado');
+      else showToast('Instalación cancelada');
+      deferredInstallPrompt = null;
+      installButton.setAttribute('hidden', '');
+    } else {
+      showToast('Instala FinTrack desde el menú del navegador');
+    }
   });
-
-  installButton.addEventListener('promptdismiss', () => {
-    showToast('Instalacion cancelada');
-  });
-
-  installButton.addEventListener('validationstatuschanged', (event) => {
-    const reason = event.target?.invalidReason;
-    if (reason) console.warn('[FinTrack] Install validation status:', reason);
-  });
-
-  if (!('HTMLInstallElement' in window)) {
-    installButton.querySelector('button')?.addEventListener('click', () => {
-      showToast('Instala FinTrack desde el menu del navegador');
-    });
-  }
 }
 
 window.addEventListener('beforeinstallprompt', (event) => {
@@ -181,7 +176,7 @@ initGastoModal(getS, onGastoSave, onGastoDelete);
 initIngresoModal(getS, onIngresoSave);
 initPresupuestoEvents(getS, onMonthChange, onBudgetSave);
 initDonateModal();
-initInstallElement();
+initInstallButton();
 
 // ── Arranque ─────────────────────────────────────────────
 registerServiceWorker();
