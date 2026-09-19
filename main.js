@@ -28,6 +28,16 @@ function registerServiceWorker() {
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          newWorker?.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showToast('Nueva versión disponible. Recargá para actualizar.');
+            }
+          });
+        });
+      })
       .catch((error) => {
         console.warn('[FinTrack] Service worker registration failed:', error);
       });
