@@ -17,6 +17,7 @@ import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js
 
 // ── Estado global ──────────────────────────────────────────
 let STATE = getState();
+let deferredInstallPrompt = null;
 
 // ── Helpers de acceso ────────────────────────────────────
 const getS  = () => STATE;
@@ -56,6 +57,12 @@ function initInstallElement() {
     });
   }
 }
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  document.getElementById('btn-install-app')?.removeAttribute('hidden');
+});
 
 // ── Navegación ────────────────────────────────────────────
 function navigate(screenId) {
