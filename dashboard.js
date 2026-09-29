@@ -7,7 +7,7 @@
 import { MESES, CUR_YEAR, ALL_CATS } from './constants.js';
 import { 
   fmt, catInfo, gastosByMonth, totalIngresosMonth, 
-  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardDebtAtEnd, html
+  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardBalanceAtEnd, html
 } from './utils.js';
 import { buildMonthSelector, gastoItemHTML } from './ui.js';
 
@@ -23,7 +23,7 @@ export function renderDashboard(state, onMonthChange, onEditGasto) {
   const ingresos = totalIngresosMonth(state, mi);
   const cashGastos = totalCashGastosMonth(state, mi);
   const presup   = totalBudgetMonth(state, mi);
-  const debt     = getCardDebtAtEnd(state, mi);
+  const cardBalance = getCardBalanceAtEnd(state, mi);
   const balance  = ingresos - cashGastos;
 
   // Balance hero
@@ -34,7 +34,14 @@ export function renderDashboard(state, onMonthChange, onEditGasto) {
   document.getElementById('dash-ingresos').textContent = fmt(ingresos);
   document.getElementById('dash-gastos').textContent   = fmt(cashGastos);
   document.getElementById('dash-presup').textContent   = fmt(presup);
-  document.getElementById('dash-debt').textContent     = fmt(debt);
+  document.getElementById('dash-debt').textContent     = fmt(cardBalance);
+
+  // Un saldo a favor no es deuda: la etiqueta y el color acompañan al signo.
+  const inCredit = cardBalance < 0;
+  const debtEl = document.getElementById('dash-debt');
+  debtEl.style.color = inCredit ? 'var(--green)' : 'var(--accent1)';
+  const debtLabel = document.getElementById('dash-debt-label');
+  if (debtLabel) debtLabel.textContent = inCredit ? '💳 saldo a favor' : '💳 deuda';
 
   _renderBadges(cashGastos, ingresos, mi, state);
   _renderBarChart(mi, state);

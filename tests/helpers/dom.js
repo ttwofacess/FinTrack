@@ -43,6 +43,7 @@ export function mountDashboardDom() {
     <div id="dash-ingresos"></div>
     <div id="dash-gastos"></div>
     <div id="dash-presup"></div>
+    <div class="bi-label" id="dash-debt-label">💳 deuda</div>
     <div id="dash-debt"></div>
     <div id="dash-badges"></div>
     <div id="dash-barchart"></div>

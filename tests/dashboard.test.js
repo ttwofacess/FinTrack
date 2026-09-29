@@ -56,6 +56,42 @@ describe('renderDashboard — balance hero', () => {
     expect(document.getElementById('dash-debt').textContent).toBe('$800');
   });
 
+  it('labels the card figure as debt when the balance is positive', () => {
+    renderDashboard(build([gasto({ id: 'a', importe: 800, medio: 'credito' })]), noop, noop);
+    expect(document.getElementById('dash-debt-label').textContent).toBe('💳 deuda');
+  });
+
+  it('labels the card figure as credit when the card was overpaid', () => {
+    renderDashboard(build([
+      gasto({ id: 'a', importe: 100, medio: 'credito' }),
+      gasto({ id: 'b', importe: 500, medio: 'debito', categoria: 'pay_card' }),
+    ]), noop, noop);
+
+    expect(document.getElementById('dash-debt').textContent).toBe('$-400');
+    expect(document.getElementById('dash-debt-label').textContent).toBe('💳 saldo a favor');
+  });
+
+  it('colours the credit in green and the debt in the accent colour', () => {
+    renderDashboard(build([gasto({ id: 'a', importe: 800, medio: 'credito' })]), noop, noop);
+    expect(document.getElementById('dash-debt').style.color).toBe('var(--accent1)');
+
+    renderDashboard(build([
+      gasto({ id: 'a', importe: 100, medio: 'credito' }),
+      gasto({ id: 'b', importe: 500, medio: 'debito', categoria: 'pay_card' }),
+    ]), noop, noop);
+    expect(document.getElementById('dash-debt').style.color).toBe('var(--green)');
+  });
+
+  it('lets a credit from a previous month offset this month debt', () => {
+    renderDashboard(build([
+      gasto({ id: 'a', mes: 0, importe: 500, medio: 'debito', categoria: 'pay_card' }),
+      gasto({ id: 'b', mes: 1, importe: 200, medio: 'credito' }),
+    ], [], 1), noop, noop);
+
+    expect(document.getElementById('dash-debt').textContent).toBe('$-300');
+    expect(document.getElementById('dash-debt-label').textContent).toBe('💳 saldo a favor');
+  });
+
   it('labels the month and year', () => {
     renderDashboard(build([], [], 4), noop, noop);
     expect(document.getElementById('dash-month-name').textContent).toBe(`Mayo ${CUR_YEAR}`);

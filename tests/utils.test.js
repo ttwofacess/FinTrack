@@ -4,7 +4,7 @@ import {
   gastosByMonth, ingresosByMonth, totalGastosMonth, totalIngresosMonth,
   cashGastosByMonth, creditGastosByMonth, cardPaymentsByMonth,
   totalCashGastosMonth, totalCreditGastosMonth, totalCardPaymentsMonth,
-  getCardDebtAtEnd, getCardDebtAtStart, totalBudgetMonth, gastoByCat,
+  getCardDebtAtEnd, getCardDebtAtStart, getCardBalanceAtEnd, totalBudgetMonth, gastoByCat,
   sanitizeText, sanitizeImporte, sanitizeMes, sanitizeEnum,
   validateBudgetUpdate, validateGasto, validateIngreso,
   MAX_BUDGET_AMOUNT,
@@ -177,20 +177,89 @@ describe('getCardDebtAtEnd', () => {
     expect(getCardDebtAtEnd(s, 0)).toBe(300);
   });
 
-  it('never reports negative debt (overpayment is discarded, not credited forward)', () => {
+  it('never reports negative debt (a credit balance is clamped away)', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 100, medio: 'credito' }),
+      gasto({ id: '2', mes: 0, importe: 500, medio: 'debito', categoria: 'pay_card' }),
+    ]);
+    expect(getCardDebtAtEnd(s, 0)).toBe(0);
+  });
+
+  it('ignores cash expenses entirely', () => {
+    const s = stateWith([gasto({ importe: 10_000, medio: 'efectivo' })]);
+    expect(getCardDebtAtEnd(s, 0)).toBe(0);
+  });
+
+  it('carries an overpayment forward as credit instead of discarding it', () => {
     const s = stateWith([
       gasto({ id: '1', mes: 0, importe: 100, medio: 'credito' }),
       gasto({ id: '2', mes: 0, importe: 500, medio: 'debito', categoria: 'pay_card' }),
       gasto({ id: '3', mes: 1, importe: 100, medio: 'credito' }),
     ]);
     expect(getCardDebtAtEnd(s, 0)).toBe(0);
-    // The 400 surplus from month 0 does not carry over.
-    expect(getCardDebtAtEnd(s, 1)).toBe(100);
+    // The 400 surplus from month 0 offsets month 1's purchase.
+    expect(getCardDebtAtEnd(s, 1)).toBe(0);
+  });
+});
+
+describe('getCardBalanceAtEnd', () => {
+  it('is 0 when there are no transactions', () => {
+    expect(getCardBalanceAtEnd(stateWith(), 0)).toBe(0);
   });
 
-  it('ignores cash expenses entirely', () => {
-    const s = stateWith([gasto({ importe: 10_000, medio: 'efectivo' })]);
-    expect(getCardDebtAtEnd(s, 0)).toBe(0);
+  it('equals the debt when the card has never been overpaid', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 500, medio: 'credito' }),
+      gasto({ id: '2', mes: 1, importe: 300, medio: 'credito' }),
+    ]);
+    expect(getCardBalanceAtEnd(s, 1)).toBe(800);
+    expect(getCardBalanceAtEnd(s, 1)).toBe(getCardDebtAtEnd(s, 1));
+  });
+
+  it('reports a negative balance when the card was overpaid', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 100, medio: 'credito' }),
+      gasto({ id: '2', mes: 0, importe: 500, medio: 'debito', categoria: 'pay_card' }),
+    ]);
+    expect(getCardBalanceAtEnd(s, 0)).toBe(-400);
+  });
+
+  it('lets a credit balance offset a later purchase', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 100, medio: 'credito' }),
+      gasto({ id: '2', mes: 0, importe: 500, medio: 'debito', categoria: 'pay_card' }),
+      gasto({ id: '3', mes: 1, importe: 250, medio: 'credito' }),
+    ]);
+    // -400 credit, then +250 of purchases => still in credit.
+    expect(getCardBalanceAtEnd(s, 1)).toBe(-150);
+  });
+
+  it('goes back into debt once the credit is exhausted', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 100, medio: 'credito' }),
+      gasto({ id: '2', mes: 0, importe: 500, medio: 'debito', categoria: 'pay_card' }),
+      gasto({ id: '3', mes: 1, importe: 900, medio: 'credito' }),
+    ]);
+    expect(getCardBalanceAtEnd(s, 1)).toBe(500);
+    expect(getCardDebtAtEnd(s, 1)).toBe(500);
+  });
+
+  it('accumulates credit across several overpayments', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 200, medio: 'debito', categoria: 'pay_card' }),
+      gasto({ id: '2', mes: 1, importe: 300, medio: 'debito', categoria: 'pay_card' }),
+    ]);
+    expect(getCardBalanceAtEnd(s, 0)).toBe(-200);
+    expect(getCardBalanceAtEnd(s, 1)).toBe(-500);
+  });
+
+  it('reports the balance at a past month, not the final one', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 100, medio: 'credito' }),
+      gasto({ id: '2', mes: 5, importe: 700, medio: 'credito' }),
+    ]);
+    expect(getCardBalanceAtEnd(s, 0)).toBe(100);
+    expect(getCardBalanceAtEnd(s, 5)).toBe(800);
   });
 });
 
@@ -206,6 +275,13 @@ describe('getCardDebtAtStart', () => {
     ]);
     expect(getCardDebtAtStart(s, 1)).toBe(500);
     expect(getCardDebtAtStart(s, 2)).toBe(750);
+  });
+
+  it('is 0 when the previous month closed in credit', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 500, medio: 'debito', categoria: 'pay_card' }),
+    ]);
+    expect(getCardDebtAtStart(s, 1)).toBe(0);
   });
 });
 

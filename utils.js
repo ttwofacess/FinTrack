@@ -128,18 +128,29 @@ export function totalCardPaymentsMonth(state, mi) {
   return cardPaymentsByMonth(state, mi).reduce((s, g) => s + (g.importe || 0), 0);
 }
 
-/** 
- * Calcula la deuda de tarjeta acumulada al FINAL de un mes.
- * Es una función recursiva o acumulativa. 
+/**
+ * Saldo con signo de la tarjeta al FINAL de un mes.
+ * Positivo = deuda pendiente. Negativo = saldo a favor (crédito).
+ *
+ * Los pagos que superan la deuda NO se descartan: quedan como crédito y
+ * compensan las compras de los meses siguientes, que es como se comporta
+ * una tarjeta real. Por eso el acumulador no se clampea a 0 mes a mes;
+ * clampear en cada paso hacía que un sobrepago se perdiera.
+ */
+export function getCardBalanceAtEnd(state, mi) {
+  let balance = 0;
+  for (let i = 0; i <= mi; i++) {
+    balance += totalCreditGastosMonth(state, i) - totalCardPaymentsMonth(state, i);
+  }
+  return balance;
+}
+
+/**
+ * Deuda de tarjeta acumulada al FINAL de un mes.
+ * Siempre >= 0: el saldo a favor se consulta con getCardBalanceAtEnd.
  */
 export function getCardDebtAtEnd(state, mi) {
-  let debt = 0;
-  for (let i = 0; i <= mi; i++) {
-    const purchases = totalCreditGastosMonth(state, i);
-    const payments = totalCardPaymentsMonth(state, i);
-    debt = Math.max(0, debt + purchases - payments);
-  }
-  return debt;
+  return Math.max(0, getCardBalanceAtEnd(state, mi));
 }
 
 /** Deuda que viene del mes anterior */
