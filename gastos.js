@@ -7,7 +7,7 @@
 // ============================================================
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
-import { fmt, catInfo, gastosByMonth, uid, validateGasto } from './utils.js';
+import { fmt, catInfo, gastosByMonth, uid, validateGasto, html, raw } from './utils.js';
 import { buildMonthSelector, closeModals, showToast, gastoItemHTML } from './ui.js';
 
 let gastoFilter   = 'all';
@@ -34,11 +34,11 @@ function _renderFilters(gastos, state, onMonthChange, onSave, onDelete) {
   const cats     = [...new Set(gastos.map(g => g.categoria))];
 
   filterEl.innerHTML =
-    `<div class="filter-chip ${gastoFilter === 'all' ? 'active' : ''}" data-cat="all">Todos</div>` +
-    `<div class="filter-chip ${gastoFilter === 'credito' ? 'active' : ''}" data-cat="credito">💳 Crédito</div>` +
+    html`<div class="filter-chip ${gastoFilter === 'all' ? 'active' : ''}" data-cat="all">Todos</div>` +
+    html`<div class="filter-chip ${gastoFilter === 'credito' ? 'active' : ''}" data-cat="credito">💳 Crédito</div>` +
     cats.map(c => {
       const ci = catInfo(c);
-      return `<div class="filter-chip ${gastoFilter === c ? 'active' : ''}" data-cat="${c}">${ci.icon} ${ci.label}</div>`;
+      return html`<div class="filter-chip ${gastoFilter === c ? 'active' : ''}" data-cat="${c}">${ci.icon} ${ci.label}</div>`;
     }).join('');
 
   filterEl.querySelectorAll('.filter-chip').forEach(el => {
@@ -102,10 +102,9 @@ export function openEditGasto(id, state, onSave, onDelete) {
 
 function _populateGastoForm(selectedMonth) {
   document.getElementById('f-mes').innerHTML =
-    MESES.map((m, i) => `<option value="${i}" ${i === selectedMonth ? 'selected' : ''}>${m}</option>`).join('');
-  document.getElementById('f-categoria').innerHTML =
-    `<optgroup label="Gastos Fijos">${CAT_FIJOS.map(c => `<option value="${c.key}">${c.icon} ${c.label}</option>`).join('')}</optgroup>
-     <optgroup label="Gastos Variables">${CAT_VARIABLES.map(c => `<option value="${c.key}">${c.icon} ${c.label}</option>`).join('')}</optgroup>`;
+    MESES.map((m, i) => html`<option value="${i}" ${i === selectedMonth ? 'selected' : ''}>${m}</option>`).join('');
+  document.getElementById('f-categoria').innerHTML = html`<optgroup label="Gastos Fijos">${raw(CAT_FIJOS.map(c => html`<option value="${c.key}">${c.icon} ${c.label}</option>`).join(''))}</optgroup>
+     <optgroup label="Gastos Variables">${raw(CAT_VARIABLES.map(c => html`<option value="${c.key}">${c.icon} ${c.label}</option>`).join(''))}</optgroup>`;
 }
 
 /** Registra los listeners del modal (llamar una sola vez en init) */

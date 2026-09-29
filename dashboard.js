@@ -7,7 +7,7 @@
 import { MESES, CUR_YEAR, ALL_CATS } from './constants.js';
 import { 
   fmt, catInfo, gastosByMonth, totalIngresosMonth, 
-  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardDebtAtEnd 
+  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardDebtAtEnd, html
 } from './utils.js';
 import { buildMonthSelector, gastoItemHTML } from './ui.js';
 
@@ -47,7 +47,7 @@ function _renderBadges(gastos, ingresos, mi, state) {
   const avgTx     = txCount > 0 ? gastos / txCount : 0;
   const savingRate = ingresos > 0 ? ((ingresos - gastos) / ingresos * 100) : 0;
 
-  document.getElementById('dash-badges').innerHTML = `
+  document.getElementById('dash-badges').innerHTML = html`
     <div class="badge">
       <div class="badge-icon">📊</div>
       <div class="badge-right">
@@ -85,7 +85,7 @@ function _renderBarChart(mi, state) {
     return;
   }
   const max = catTotals[0].total;
-  barEl.innerHTML = catTotals.map(c => `
+  barEl.innerHTML = catTotals.map(c => html`
     <div class="bar-row">
       <div class="bar-label">${c.icon} ${c.label}</div>
       <div class="bar-track">
@@ -111,7 +111,7 @@ function _renderBudgetVsReal(mi, state) {
   bvrEl.innerHTML = bvItems.map(c => {
     const pct = c.budget > 0 ? Math.min(c.real / c.budget * 100, 100) : 0;
     const cls = pct < 70 ? 'ok' : pct < 100 ? 'warn' : 'over';
-    return `
+    return html`
       <div class="bvr-row">
         <div class="bvr-header">
           <div class="bvr-name">${c.icon} ${c.label}</div>

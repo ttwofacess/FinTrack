@@ -6,6 +6,7 @@
 // ============================================================
 
 import { MESES } from './constants.js';
+import { html } from './utils.js';
 
 /** Muestra un toast temporario */
 export function showToast(msg, options = {}) {
@@ -79,7 +80,7 @@ export function gastoItemHTML(g, catInfoFn, fmtFn) {
   const ci = catInfoFn(g.categoria);
   const medioLabel = g.medio === 'credito' ? '💳 crédito' : (g.medio || 'efectivo');
 
-  return `<div class="gasto-item" data-id="${g.id}">
+  return html`<div class="gasto-item" data-id="${g.id}">
     <div class="gasto-icon" style="background:${ci.color}22">${ci.icon}</div>
     <div class="gasto-info">
       <div class="gasto-name">${g.detalle}</div>

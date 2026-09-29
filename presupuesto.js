@@ -5,7 +5,7 @@
 // ============================================================
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
-import { fmt, ingresosByMonth, totalIngresosMonth, gastoByCat, validateBudgetUpdate } from './utils.js';
+import { fmt, ingresosByMonth, totalIngresosMonth, gastoByCat, validateBudgetUpdate, html } from './utils.js';
 import { buildMonthSelector, showToast } from './ui.js';
 
 let presupTab = 'fijos';
@@ -38,10 +38,10 @@ function _renderIngresosTab(mi, state, el) {
   const ings     = ingresosByMonth(state, mi);
   const totalIng = totalIngresosMonth(state, mi);
   el.innerHTML =
-    `<div class="card-title">Total: ${fmt(totalIng)}</div>` +
+    html`<div class="card-title">Total: ${fmt(totalIng)}</div>` +
     (ings.length === 0
       ? '<div class="empty-state" style="padding:16px"><div class="empty-icon">💰</div>Sin ingresos este mes</div>'
-      : ings.map(g => `
+      : ings.map(g => html`
           <div class="ingreso-list-item">
             <div class="ili-left">
               <div class="ili-name">${g.descripcion}</div>
@@ -57,7 +57,7 @@ function _renderBudgetTab(cats, budgets, mi, state, el) {
     const real   = gastoByCat(state, mi, c.key);
     const pct    = budget > 0 ? (real / budget * 100).toFixed(0) : 0;
     const statusColor = pct > 100 ? 'var(--red)' : pct > 70 ? 'var(--accent4)' : 'var(--accent3)';
-    return `<div class="presup-item">
+    return html`<div class="presup-item">
       <div class="presup-icon" style="background:${c.color}22">${c.icon}</div>
       <div class="presup-info">
         <div class="presup-name">${c.label}</div>
@@ -84,8 +84,8 @@ export function openEditPresup(state, onBudgetSave) {
   const el      = document.getElementById('presup-content');
 
   el.innerHTML =
-    `<div class="card-title" style="margin-bottom:16px">Editar Budget · ${MESES[mi]}</div>` +
-    cats.map(c => `
+    html`<div class="card-title" style="margin-bottom:16px">Editar Budget · ${MESES[mi]}</div>` +
+    cats.map(c => html`
       <div class="presup-item">
         <div class="presup-icon" style="background:${c.color}22">${c.icon}</div>
         <div class="presup-info"><div class="presup-name">${c.label}</div></div>
@@ -94,7 +94,7 @@ export function openEditPresup(state, onBudgetSave) {
                  type="number" min="0" step="0.01" style="width:110px;text-align:right;padding:8px 10px">
         </div>
       </div>`).join('') +
-    `<div style="padding:12px 0 4px"><button class="btn-primary" id="btn-save-presup">Guardar Budget</button></div>`;
+    '<div style="padding:12px 0 4px"><button class="btn-primary" id="btn-save-presup">Guardar Budget</button></div>';
 
   document.getElementById('btn-save-presup').addEventListener('click', () => {
     const rawUpdates = {};

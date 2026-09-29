@@ -22,6 +22,64 @@ export function catInfo(key) {
   return ALL_CATS.find(c => c.key === key) || { label: key, icon: '📦', color: '#888' };
 }
 
+// ── Escapado de HTML ───────────────────────────────────────
+//
+// Los campos de texto que el usuario carga (detalle, descripcion) llegan
+// desde el formulario o desde un JSON importado, así que no son confiables.
+// Assigned a innerHTML deben escaparse SIEMPRE en el momento del render, no
+// al guardar: escapar al guardar alteraría el dato persistido y complicaría
+// las comparaciones. Usá el tag `html` en vez de interpolar a mano.
+
+const ESCAPE_MAP = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+const UNSAFE_CHARS = /[&<>"']/g;
+
+/** Escapa los caracteres con significado en HTML y en atributos. */
+export function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).replace(UNSAFE_CHARS, ch => ESCAPE_MAP[ch]);
+}
+
+/** Marca un string como HTML ya confiable para que `html` no lo escape dos veces. */
+class SafeHtml {
+  constructor(value) {
+    this.value = String(value);
+  }
+  toString() {
+    return this.value;
+  }
+}
+
+/** Envuelve markup confiable que ya se quiere insertar literal. */
+export function raw(value) {
+  return new SafeHtml(value);
+}
+
+/**
+ * Tagged template que escapa cada valor interpolado.
+ * Pensado para armar markup que después se asigna a innerHTML:
+ *
+ *   el.innerHTML = html`<div class="x">${userInput}</div>`;
+ *
+ * Lo que quede como texto estático en el template NO se escapa, así que
+ * `html` también sirve para composing markup. Para interpolar markup
+ * confiable usá `raw(...)`.
+ */
+export function html(strings, ...values) {
+  let out = strings[0];
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i];
+    out += (value instanceof SafeHtml ? value.value : escapeHtml(value)) + strings[i + 1];
+  }
+  return out;
+}
+
 // ── Consultas de datos ─────────────────────────────────────
 
 export function gastosByMonth(state, mi) {

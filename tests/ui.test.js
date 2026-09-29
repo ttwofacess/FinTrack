@@ -216,10 +216,42 @@ describe('gastoItemHTML', () => {
     expect(html).toContain('#fb923c');
   });
 
-  it('injects detalle into the markup without HTML escaping', () => {
-    // sanitizeText() only trims/collapses whitespace, so markup in `detalle`
-    // reaches innerHTML verbatim. Documented as-is to make the risk visible.
-    const html = gastoItemHTML({ ...base, detalle: '<img src=x onerror=alert(1)>' }, catInfo, fmt);
-    expect(html).toContain('<img src=x onerror=alert(1)>');
+  it('escapes HTML in detalle so injected markup is inert', () => {
+    const markup = gastoItemHTML({ ...base, detalle: '<img src=x onerror=alert(1)>' }, catInfo, fmt);
+    expect(markup).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(markup).not.toContain('<img src=x');
+
+    // The dangerous markup must not survive as a real element once parsed.
+    const host = document.createElement('div');
+    host.innerHTML = markup;
+    expect(host.querySelector('img')).toBeNull();
+  });
+
+  it('escapes quotes so detalle cannot break out of an attribute', () => {
+    const markup = gastoItemHTML({ ...base, detalle: '" autofocus onfocus=alert(1) x="' }, catInfo, fmt);
+    expect(markup).toContain('&quot;');
+  });
+
+  it('escapes the id attribute', () => {
+    const markup = gastoItemHTML({ ...base, id: 'a"><script>alert(1)</script>' }, catInfo, fmt);
+    expect(markup).not.toContain('<script>');
+
+    const host = document.createElement('div');
+    host.innerHTML = markup;
+    expect(host.querySelector('script')).toBeNull();
+  });
+
+  it('escapes a category label coming from an unknown key', () => {
+    // catInfo() falls back to using the raw key as the label, and keys can
+    // come from an imported JSON file.
+    const markup = gastoItemHTML({ ...base, categoria: '<b>x</b>' }, catInfo, fmt);
+    expect(markup).toContain('&lt;b&gt;x&lt;/b&gt;');
+  });
+
+  it('still renders the plain-text detalle correctly', () => {
+    const markup = gastoItemHTML({ ...base, detalle: 'Compra &Lt;pan&Gt;' }, catInfo, fmt);
+    const host = document.createElement('div');
+    host.innerHTML = markup;
+    expect(host.querySelector('.gasto-name').textContent).toBe('Compra &Lt;pan&Gt;');
   });
 });
