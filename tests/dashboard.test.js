@@ -177,6 +177,12 @@ describe('renderDashboard — bar chart', () => {
     renderDashboard(build([gasto({ categoria: 'salidas', importe: 100 })]), noop, noop);
     expect(document.querySelectorAll('#dash-barchart .bar-row')).toHaveLength(1);
   });
+
+  it('skips a category whose only entry has a malformed importe', () => {
+    renderDashboard(build([gasto({ categoria: 'salidas', importe: undefined })]), noop, noop);
+    expect(document.querySelectorAll('#dash-barchart .bar-row')).toHaveLength(0);
+    expect(document.querySelector('#dash-barchart .empty-state')).not.toBeNull();
+  });
 });
 
 describe('renderDashboard — budget vs real', () => {

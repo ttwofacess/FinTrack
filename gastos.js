@@ -57,7 +57,7 @@ function _renderList(gastos, state, onSave, onDelete) {
     filtered = gastos.filter(g => g.categoria === gastoFilter);
   }
   
-  const total = filtered.reduce((s, g) => s + g.importe, 0);
+  const total = filtered.reduce((s, g) => s + (g.importe || 0), 0);
   document.getElementById('gastos-count').textContent      = filtered.length + ' registros';
   document.getElementById('gastos-total-pill').textContent = fmt(total) + ' total';
 

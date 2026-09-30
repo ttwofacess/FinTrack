@@ -320,9 +320,18 @@ describe('gastoByCat', () => {
     expect(gastoByCat(s, 0, 'mascotas')).toBe(0);
   });
 
-  it('propagates NaN when importe is missing (no || 0 fallback)', () => {
+  it('treats a missing importe as 0 instead of poisoning the sum with NaN', () => {
     const bad = stateWith([gasto({ categoria: 'salidas', importe: undefined })]);
-    expect(gastoByCat(bad, 0, 'salidas')).toBeNaN();
+    expect(gastoByCat(bad, 0, 'salidas')).toBe(0);
+  });
+
+  it('keeps a good sum when one entry in the category is malformed', () => {
+    const mixed = stateWith([
+      gasto({ id: '1', categoria: 'salidas', importe: 100 }),
+      gasto({ id: '2', categoria: 'salidas', importe: undefined }),
+      gasto({ id: '3', categoria: 'salidas', importe: 50 }),
+    ]);
+    expect(gastoByCat(mixed, 0, 'salidas')).toBe(150);
   });
 });
 
@@ -348,27 +357,94 @@ describe('sanitizeText', () => {
 });
 
 describe('sanitizeImporte', () => {
-  it('parses valid numbers and numeric strings', () => {
+  it('parses numbers as-is', () => {
     expect(sanitizeImporte(100)).toBe(100);
+    expect(sanitizeImporte(100.55)).toBe(100.55);
+    expect(sanitizeImporte(0)).toBe(0);
+    expect(sanitizeImporte(-50)).toBe(-50);
+  });
+
+  it('parses plain numeric strings', () => {
+    expect(sanitizeImporte('100')).toBe(100);
     expect(sanitizeImporte('100.55')).toBe(100.55);
+    expect(sanitizeImporte('.5')).toBe(0.5);
+    expect(sanitizeImporte('-42')).toBe(-42);
+    expect(sanitizeImporte('+42')).toBe(42);
+  });
+
+  it('ignores surrounding whitespace', () => {
     expect(sanitizeImporte(' 42 ')).toBe(42);
+    expect(sanitizeImporte('\t 1500.50 \n')).toBe(1500.5);
+  });
+
+  it('accepts exponent notation', () => {
+    expect(sanitizeImporte('1e3')).toBe(1000);
+    expect(sanitizeImporte('1.5e2')).toBe(150);
+    expect(sanitizeImporte('1e+21')).toBe(1e21);
+  });
+
+  it('returns NaN for trailing garbage instead of a partial parse', () => {
+    expect(sanitizeImporte('100abc')).toBeNaN();
+    expect(sanitizeImporte('50usd')).toBeNaN();
+    expect(sanitizeImporte('12px')).toBeNaN();
+    expect(sanitizeImporte('$100')).toBeNaN();
+  });
+
+  it('returns NaN for leading garbage', () => {
+    expect(sanitizeImporte('abc100')).toBeNaN();
+    expect(sanitizeImporte('  # 100')).toBeNaN();
+  });
+
+  it('returns NaN for malformed separators', () => {
+    expect(sanitizeImporte('1.2.3')).toBeNaN();
+    expect(sanitizeImporte('1,2,3')).toBeNaN();
+    expect(sanitizeImporte('1..2')).toBeNaN();
+    expect(sanitizeImporte('..')).toBeNaN();
+    expect(sanitizeImporte('-')).toBeNaN();
+    expect(sanitizeImporte('.')).toBeNaN();
+  });
+
+  it('parses the es-AR thousands separator with a comma decimal', () => {
+    expect(sanitizeImporte('1.500,50')).toBe(1500.5);
+    expect(sanitizeImporte('1.234.567,89')).toBe(1234567.89);
+    expect(sanitizeImporte('-1.500,50')).toBe(-1500.5);
+  });
+
+  it('parses a comma decimal without a thousands separator', () => {
+    expect(sanitizeImporte('1500,50')).toBe(1500.5);
+    expect(sanitizeImporte('0,5')).toBe(0.5);
+    expect(sanitizeImporte('1500,000')).toBe(1500);
+  });
+
+  it('rejects a trailing separator with no digits after it', () => {
+    expect(sanitizeImporte('1500,')).toBeNaN();
+    expect(sanitizeImporte('1500.')).toBeNaN();
+  });
+
+  it('parses the en-US grouped format', () => {
+    expect(sanitizeImporte('1,234,567.89')).toBe(1234567.89);
+    expect(sanitizeImporte('1,000')).toBe(1000);
   });
 
   it('returns NaN for unparseable values', () => {
     expect(sanitizeImporte('abc')).toBeNaN();
     expect(sanitizeImporte('')).toBeNaN();
+    expect(sanitizeImporte('   ')).toBeNaN();
+  });
+
+  it('returns NaN for non-string, non-number types', () => {
     expect(sanitizeImporte(null)).toBeNaN();
     expect(sanitizeImporte(undefined)).toBeNaN();
+    expect(sanitizeImporte(true)).toBeNaN();
+    expect(sanitizeImporte({})).toBeNaN();
+    // parseFloat([100]) === 100, so arrays used to sneak through.
+    expect(sanitizeImporte([100])).toBeNaN();
   });
 
-  it('accepts a leading numeric prefix and ignores the rest', () => {
-    // parseFloat('100abc') === 100 — no strict rejection of trailing garbage.
-    expect(sanitizeImporte('100abc')).toBe(100);
-    expect(sanitizeImporte('-50')).toBe(-50);
-  });
-
-  it('returns NaN for Infinity', () => {
+  it('returns NaN for non-finite numbers', () => {
     expect(sanitizeImporte(Infinity)).toBeNaN();
+    expect(sanitizeImporte(-Infinity)).toBeNaN();
+    expect(sanitizeImporte(NaN)).toBeNaN();
   });
 });
 
@@ -509,6 +585,16 @@ describe('validateGasto', () => {
     const r = validateGasto({ ...valid, importe: 'abc' });
     expect(r.ok).toBe(false);
     expect(r.errors).toContain('El importe debe ser un número mayor que cero.');
+  });
+
+  it('rejects an importe with trailing garbage', () => {
+    expect(validateGasto({ ...valid, importe: '1500abc' }).ok).toBe(false);
+    expect(validateGasto({ ...valid, importe: '1500abc' }).errors)
+      .toContain('El importe debe ser un número mayor que cero.');
+  });
+
+  it('accepts an importe written in es-AR format', () => {
+    expect(validateGasto({ ...valid, importe: '1.500,50' }).data.importe).toBe(1500.5);
   });
 
   it('rejects a zero importe', () => {

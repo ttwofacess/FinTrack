@@ -118,6 +118,15 @@ describe('renderGastos', () => {
     expect(document.querySelectorAll('#gastos-list .gasto-item')).toHaveLength(2);
   });
 
+  it('treats a malformed importe as 0 in the total pill instead of NaN', () => {
+    renderGastos(stateWith([
+      gasto({ id: '1', importe: 1000 }),
+      gasto({ id: '2', importe: undefined }),
+    ]), noop, noop, noop);
+
+    expect(document.getElementById('gastos-total-pill').textContent).toBe('$1.000 total');
+  });
+
   it('builds the month selector for the active month', () => {
     renderGastos(stateWith([], 5), noop, noop, noop);
     const active = document.querySelector('#gastos-months .month-btn.active');

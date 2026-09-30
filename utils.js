@@ -167,7 +167,7 @@ export function totalBudgetMonth(state, mi) {
 export function gastoByCat(state, mi, catKey) {
   return gastosByMonth(state, mi)
     .filter(g => g.categoria === catKey)
-    .reduce((s, g) => s + g.importe, 0);
+    .reduce((s, g) => s + (g.importe || 0), 0);
 }
 
 // ── Sanitization helpers ────────────────────────────────────
@@ -178,9 +178,44 @@ export function sanitizeText(value) {
   return value.trim().replace(/\s+/g, ' ');
 }
 
-/** Parses a float; returns NaN if the result is not finite */
+// Formatos numéricos aceptados. Se validan con el string COMPLETO: parseFloat
+// acepta cualquier prefijo numérico y descarta el resto, así que "100abc"
+// devolvía 100 y "1.500,50" devolvía 1.5 (corrupción silenciosa de un importe
+// escrito en formato es-AR). Se prefiere el rechazo explícito a un importe mal
+// parseado: los formularios usan <input type="number">, que ya entrega strings
+// limpios, así que el parseo laxo solo se aprovechaba en el import.
+const IMPORTE_PLAIN         = /^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
+const IMPORTE_GROUP_DOT     = /^[+-]?\d{1,3}(\.\d{3})+(,\d+)?$/;  // 1.234.567,89
+const IMPORTE_GROUP_COMMA   = /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/;  // 1,234,567.89
+const IMPORTE_DECIMAL_COMMA = /^[+-]?\d+(,\d+)?$/;               // 1234,56
+
+/**
+ * Convierte un importe a número; devuelve NaN si no representa uno válido.
+ * Acepta números y strings, incluyendo separador de miles y coma decimal
+ * (formatos es-AR y en-US). Rechaza cualquier otro carácter en vez de
+ * ignorar la basura: "100abc" es NaN, no 100.
+ */
 export function sanitizeImporte(value) {
-  const n = parseFloat(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+  if (typeof value !== 'string') return NaN;
+
+  const s = value.trim();
+  if (s === '') return NaN;
+
+  let normalized;
+  if (IMPORTE_PLAIN.test(s)) {
+    normalized = s;
+  } else if (IMPORTE_GROUP_DOT.test(s)) {
+    normalized = s.replace(/\./g, '').replace(',', '.');
+  } else if (IMPORTE_GROUP_COMMA.test(s)) {
+    normalized = s.replace(/,/g, '');
+  } else if (IMPORTE_DECIMAL_COMMA.test(s)) {
+    normalized = s.replace(',', '.');
+  } else {
+    return NaN;
+  }
+
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : NaN;
 }
 

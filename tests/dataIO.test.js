@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { importData, exportData, initDataIO } from '../dataIO.js';
 import { defaultState } from '../store.js';
+import { fmt } from '../utils.js';
 
 beforeEach(() => {
   document.body.innerHTML = '<div id="toast"></div>';
@@ -59,6 +60,69 @@ describe('importData', () => {
     const { called } = await runImport(jsonFile(JSON.stringify(state)));
     expect(called).toBe(false);
     expect(toastText()).toContain('gasto(s) con datos inválidos');
+  });
+
+  it('rejects a gasto whose importe has trailing garbage', async () => {
+    const state = defaultState();
+    // The old parseFloat('1500abc') === 1500 silently accepted a bad import.
+    state.gastos.push({ id: '1', detalle: 'Cafe', importe: '1500abc', mes: 0, categoria: 'salidas', medio: 'efectivo' });
+
+    const { called } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(false);
+    expect(toastText()).toContain('gasto(s) con datos inválidos');
+  });
+
+  it('accepts a gasto whose importe is in es-AR string format', async () => {
+    const state = defaultState();
+    state.gastos.push({ id: '1', detalle: 'Alquiler', importe: '1.500,50', mes: 0, categoria: 'vivienda', medio: 'transferencia' });
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.gastos[0].importe).toBe(1500.5);
+  });
+
+  it('normalises string fields on import so they render, not just validate', async () => {
+    const state = defaultState();
+    state.gastos.push({ id: 'keep-me', detalle: '  Almuerzo  del  dia ', importe: '1.500,50', mes: '7', categoria: 'alimentacion', medio: 'credito' });
+    state.ingresos.push({ id: 'ing-1', descripcion: '  Sueldo ', importe: '1.200.000,75', mes: '7', tipo: 'sueldo' });
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+
+    expect(data.gastos[0]).toEqual({
+      id: 'keep-me',
+      detalle: 'Almuerzo del dia',
+      importe: 1500.5,
+      mes: 7,
+      categoria: 'alimentacion',
+      medio: 'credito',
+    });
+    expect(data.ingresos[0]).toEqual({
+      id: 'ing-1',
+      descripcion: 'Sueldo',
+      importe: 1200000.75,
+      mes: 7,
+      tipo: 'sueldo',
+    });
+  });
+
+  it('leaves an imported amount in a form the formatter can render', async () => {
+    const state = defaultState();
+    state.gastos.push({ id: '1', detalle: 'Alquiler', importe: '1.500,50', mes: 0, categoria: 'vivienda', medio: 'transferencia' });
+
+    const { data } = await runImport(jsonFile(JSON.stringify(state)));
+    // fmt() returns $0 for anything it cannot parse; the import must not leave a string.
+    expect(typeof data.gastos[0].importe).toBe('number');
+    expect(fmt(data.gastos[0].importe)).toBe('$1.501');
+  });
+
+  it('normalises budget amounts on import', async () => {
+    const state = defaultState();
+    state.budgets[2].vivienda = '1.500,50';
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.budgets[2].vivienda).toBe(1500.5);
   });
 
   it('rejects ingresos with invalid data', async () => {
