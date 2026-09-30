@@ -36,22 +36,29 @@ function validateImportedState(data) {
 
   if (errors.length) return { ok: false, errors, data: normalized };
 
-  // Validate individual gastos — skip malformed entries and report them
-  const badGastos = normalized.gastos.filter(g => {
+  // Validate individual gastos. Los válidos se reescriben con los datos ya
+  // saneados: sin esto un importe importado como string queda crudo en el
+  // estado y se renderiza como $0, porque fmt() no parsea strings con
+  // separador de miles. Los inválidos se conservan y se reportan.
+  let badGastos = 0;
+  normalized.gastos = normalized.gastos.map(g => {
     const r = validateGasto(g);
-    return !r.ok;
+    if (!r.ok) { badGastos++; return g; }
+    return { ...g, ...r.data };
   });
-  if (badGastos.length > 0) {
-    errors.push(`${badGastos.length} gasto(s) con datos inválidos fueron encontrados.`);
+  if (badGastos > 0) {
+    errors.push(`${badGastos} gasto(s) con datos inválidos fueron encontrados.`);
   }
 
   // Validate individual ingresos
-  const badIngresos = normalized.ingresos.filter(i => {
+  let badIngresos = 0;
+  normalized.ingresos = normalized.ingresos.map(i => {
     const r = validateIngreso(i);
-    return !r.ok;
+    if (!r.ok) { badIngresos++; return i; }
+    return { ...i, ...r.data };
   });
-  if (badIngresos.length > 0) {
-    errors.push(`${badIngresos.length} ingreso(s) con datos inválidos fueron encontrados.`);
+  if (badIngresos > 0) {
+    errors.push(`${badIngresos} ingreso(s) con datos inválidos fueron encontrados.`);
   }
 
   // Validate budgets
@@ -64,7 +71,10 @@ function validateImportedState(data) {
     const r = validateBudgetUpdate(updates);
     if (!r.ok) {
       errors.push(`Presupuesto inválido para el mes ${monthIndex}: ${r.errors[0]}`);
+      continue;
     }
+    // Igual que en gastos: escribir el budget saneado, no el crudo.
+    normalized.budgets[mi] = { ...updates, ...r.data };
   }
 
   return { ok: errors.length === 0, errors, data: normalized };

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fintrack-v3';
+const CACHE_NAME = 'fintrack-v4';
 
 const APP_SHELL = [
   '/',

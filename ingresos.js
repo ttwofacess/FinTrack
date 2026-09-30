@@ -5,7 +5,7 @@
 // ============================================================
 
 import { MESES, CUR_YEAR } from './constants.js';
-import { fmt, uid, ingresosByMonth, totalIngresosMonth, validateIngreso } from './utils.js';
+import { fmt, uid, ingresosByMonth, totalIngresosMonth, validateIngreso, html } from './utils.js';
 import { buildMonthSelector, closeModals, showToast } from './ui.js';
 
 /**
@@ -23,7 +23,7 @@ export function renderIngresos(state, onMonthChange) {
     ? MESES.reduce((s, _, i) => s + totalIngresosMonth(state, i), 0) / 12
     : 0;
 
-  document.getElementById('ing-summary-cards').innerHTML = `
+  document.getElementById('ing-summary-cards').innerHTML = html`
     <div class="ingreso-card">
       <div class="ingreso-label">este mes</div>
       <div class="ingreso-value" style="color:var(--green)">${fmt(total)}</div>
@@ -50,7 +50,7 @@ export function renderIngresos(state, onMonthChange) {
   if (ings.length === 0) {
     listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div>Sin ingresos este mes<br>Tocá + nuevo para agregar</div>';
   } else {
-    listEl.innerHTML = ings.map(g => `
+    listEl.innerHTML = ings.map(g => html`
       <div class="ingreso-list-item">
         <div class="ili-left">
           <div class="ili-name">${g.descripcion}</div>
@@ -66,7 +66,7 @@ export function openNewIngreso(selectedMonth) {
   document.getElementById('fi-desc').value   = '';
   document.getElementById('fi-importe').value = '';
   document.getElementById('fi-mes').innerHTML =
-    MESES.map((m, i) => `<option value="${i}" ${i === selectedMonth ? 'selected' : ''}>${m}</option>`).join('');
+    MESES.map((m, i) => html`<option value="${i}" ${i === selectedMonth ? 'selected' : ''}>${m}</option>`).join('');
   document.getElementById('modal-ingreso').classList.add('open');
 }
 

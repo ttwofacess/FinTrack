@@ -23,6 +23,17 @@ Al ser una aplicación web estática, no requiere instalación compleja:
 2. Abre el archivo `index.html` en cualquier navegador moderno.
 3. ¡Empieza a trackear tus finanzas!
 
+## 🧪 Tests
+
+El proyecto incluye tests unitarios con [Vitest](https://vitest.dev) sobre un entorno `jsdom`:
+
+```bash
+pnpm install       # instala las devDependencies
+pnpm test          # corre la suite una vez
+pnpm test:watch    # modo watch
+pnpm test:coverage # reporte de cobertura en coverage/
+```
+
 ## 🛠️ Tecnologías Utilizadas
 
 - **HTML5**: Estructura semántica.

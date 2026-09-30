@@ -1,1 +1,10 @@
 .ps1
+
+# Dependencias y artefactos de tests
+node_modules/
+coverage/
+*.log
+
+# Planes
+Correction.md
+CorrectionV2.md

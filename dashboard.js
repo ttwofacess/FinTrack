@@ -7,7 +7,7 @@
 import { MESES, CUR_YEAR, ALL_CATS } from './constants.js';
 import { 
   fmt, catInfo, gastosByMonth, totalIngresosMonth, 
-  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardDebtAtEnd 
+  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardBalanceAtEnd, html
 } from './utils.js';
 import { buildMonthSelector, gastoItemHTML } from './ui.js';
 
@@ -23,7 +23,7 @@ export function renderDashboard(state, onMonthChange, onEditGasto) {
   const ingresos = totalIngresosMonth(state, mi);
   const cashGastos = totalCashGastosMonth(state, mi);
   const presup   = totalBudgetMonth(state, mi);
-  const debt     = getCardDebtAtEnd(state, mi);
+  const cardBalance = getCardBalanceAtEnd(state, mi);
   const balance  = ingresos - cashGastos;
 
   // Balance hero
@@ -34,7 +34,14 @@ export function renderDashboard(state, onMonthChange, onEditGasto) {
   document.getElementById('dash-ingresos').textContent = fmt(ingresos);
   document.getElementById('dash-gastos').textContent   = fmt(cashGastos);
   document.getElementById('dash-presup').textContent   = fmt(presup);
-  document.getElementById('dash-debt').textContent     = fmt(debt);
+  document.getElementById('dash-debt').textContent     = fmt(cardBalance);
+
+  // Un saldo a favor no es deuda: la etiqueta y el color acompañan al signo.
+  const inCredit = cardBalance < 0;
+  const debtEl = document.getElementById('dash-debt');
+  debtEl.style.color = inCredit ? 'var(--green)' : 'var(--accent1)';
+  const debtLabel = document.getElementById('dash-debt-label');
+  if (debtLabel) debtLabel.textContent = inCredit ? '💳 saldo a favor' : '💳 deuda';
 
   _renderBadges(cashGastos, ingresos, mi, state);
   _renderBarChart(mi, state);
@@ -47,7 +54,7 @@ function _renderBadges(gastos, ingresos, mi, state) {
   const avgTx     = txCount > 0 ? gastos / txCount : 0;
   const savingRate = ingresos > 0 ? ((ingresos - gastos) / ingresos * 100) : 0;
 
-  document.getElementById('dash-badges').innerHTML = `
+  document.getElementById('dash-badges').innerHTML = html`
     <div class="badge">
       <div class="badge-icon">📊</div>
       <div class="badge-right">
@@ -85,7 +92,7 @@ function _renderBarChart(mi, state) {
     return;
   }
   const max = catTotals[0].total;
-  barEl.innerHTML = catTotals.map(c => `
+  barEl.innerHTML = catTotals.map(c => html`
     <div class="bar-row">
       <div class="bar-label">${c.icon} ${c.label}</div>
       <div class="bar-track">
@@ -111,7 +118,7 @@ function _renderBudgetVsReal(mi, state) {
   bvrEl.innerHTML = bvItems.map(c => {
     const pct = c.budget > 0 ? Math.min(c.real / c.budget * 100, 100) : 0;
     const cls = pct < 70 ? 'ok' : pct < 100 ? 'warn' : 'over';
-    return `
+    return html`
       <div class="bvr-row">
         <div class="bvr-header">
           <div class="bvr-name">${c.icon} ${c.label}</div>

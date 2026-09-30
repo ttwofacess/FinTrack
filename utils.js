@@ -22,6 +22,64 @@ export function catInfo(key) {
   return ALL_CATS.find(c => c.key === key) || { label: key, icon: '📦', color: '#888' };
 }
 
+// ── Escapado de HTML ───────────────────────────────────────
+//
+// Los campos de texto que el usuario carga (detalle, descripcion) llegan
+// desde el formulario o desde un JSON importado, así que no son confiables.
+// Assigned a innerHTML deben escaparse SIEMPRE en el momento del render, no
+// al guardar: escapar al guardar alteraría el dato persistido y complicaría
+// las comparaciones. Usá el tag `html` en vez de interpolar a mano.
+
+const ESCAPE_MAP = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+const UNSAFE_CHARS = /[&<>"']/g;
+
+/** Escapa los caracteres con significado en HTML y en atributos. */
+export function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).replace(UNSAFE_CHARS, ch => ESCAPE_MAP[ch]);
+}
+
+/** Marca un string como HTML ya confiable para que `html` no lo escape dos veces. */
+class SafeHtml {
+  constructor(value) {
+    this.value = String(value);
+  }
+  toString() {
+    return this.value;
+  }
+}
+
+/** Envuelve markup confiable que ya se quiere insertar literal. */
+export function raw(value) {
+  return new SafeHtml(value);
+}
+
+/**
+ * Tagged template que escapa cada valor interpolado.
+ * Pensado para armar markup que después se asigna a innerHTML:
+ *
+ *   el.innerHTML = html`<div class="x">${userInput}</div>`;
+ *
+ * Lo que quede como texto estático en el template NO se escapa, así que
+ * `html` también sirve para composing markup. Para interpolar markup
+ * confiable usá `raw(...)`.
+ */
+export function html(strings, ...values) {
+  let out = strings[0];
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i];
+    out += (value instanceof SafeHtml ? value.value : escapeHtml(value)) + strings[i + 1];
+  }
+  return out;
+}
+
 // ── Consultas de datos ─────────────────────────────────────
 
 export function gastosByMonth(state, mi) {
@@ -70,18 +128,29 @@ export function totalCardPaymentsMonth(state, mi) {
   return cardPaymentsByMonth(state, mi).reduce((s, g) => s + (g.importe || 0), 0);
 }
 
-/** 
- * Calcula la deuda de tarjeta acumulada al FINAL de un mes.
- * Es una función recursiva o acumulativa. 
+/**
+ * Saldo con signo de la tarjeta al FINAL de un mes.
+ * Positivo = deuda pendiente. Negativo = saldo a favor (crédito).
+ *
+ * Los pagos que superan la deuda NO se descartan: quedan como crédito y
+ * compensan las compras de los meses siguientes, que es como se comporta
+ * una tarjeta real. Por eso el acumulador no se clampea a 0 mes a mes;
+ * clampear en cada paso hacía que un sobrepago se perdiera.
+ */
+export function getCardBalanceAtEnd(state, mi) {
+  let balance = 0;
+  for (let i = 0; i <= mi; i++) {
+    balance += totalCreditGastosMonth(state, i) - totalCardPaymentsMonth(state, i);
+  }
+  return balance;
+}
+
+/**
+ * Deuda de tarjeta acumulada al FINAL de un mes.
+ * Siempre >= 0: el saldo a favor se consulta con getCardBalanceAtEnd.
  */
 export function getCardDebtAtEnd(state, mi) {
-  let debt = 0;
-  for (let i = 0; i <= mi; i++) {
-    const purchases = totalCreditGastosMonth(state, i);
-    const payments = totalCardPaymentsMonth(state, i);
-    debt = Math.max(0, debt + purchases - payments);
-  }
-  return debt;
+  return Math.max(0, getCardBalanceAtEnd(state, mi));
 }
 
 /** Deuda que viene del mes anterior */
@@ -98,7 +167,7 @@ export function totalBudgetMonth(state, mi) {
 export function gastoByCat(state, mi, catKey) {
   return gastosByMonth(state, mi)
     .filter(g => g.categoria === catKey)
-    .reduce((s, g) => s + g.importe, 0);
+    .reduce((s, g) => s + (g.importe || 0), 0);
 }
 
 // ── Sanitization helpers ────────────────────────────────────
@@ -109,9 +178,44 @@ export function sanitizeText(value) {
   return value.trim().replace(/\s+/g, ' ');
 }
 
-/** Parses a float; returns NaN if the result is not finite */
+// Formatos numéricos aceptados. Se validan con el string COMPLETO: parseFloat
+// acepta cualquier prefijo numérico y descarta el resto, así que "100abc"
+// devolvía 100 y "1.500,50" devolvía 1.5 (corrupción silenciosa de un importe
+// escrito en formato es-AR). Se prefiere el rechazo explícito a un importe mal
+// parseado: los formularios usan <input type="number">, que ya entrega strings
+// limpios, así que el parseo laxo solo se aprovechaba en el import.
+const IMPORTE_PLAIN         = /^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
+const IMPORTE_GROUP_DOT     = /^[+-]?\d{1,3}(\.\d{3})+(,\d+)?$/;  // 1.234.567,89
+const IMPORTE_GROUP_COMMA   = /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/;  // 1,234,567.89
+const IMPORTE_DECIMAL_COMMA = /^[+-]?\d+(,\d+)?$/;               // 1234,56
+
+/**
+ * Convierte un importe a número; devuelve NaN si no representa uno válido.
+ * Acepta números y strings, incluyendo separador de miles y coma decimal
+ * (formatos es-AR y en-US). Rechaza cualquier otro carácter en vez de
+ * ignorar la basura: "100abc" es NaN, no 100.
+ */
 export function sanitizeImporte(value) {
-  const n = parseFloat(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+  if (typeof value !== 'string') return NaN;
+
+  const s = value.trim();
+  if (s === '') return NaN;
+
+  let normalized;
+  if (IMPORTE_PLAIN.test(s)) {
+    normalized = s;
+  } else if (IMPORTE_GROUP_DOT.test(s)) {
+    normalized = s.replace(/\./g, '').replace(',', '.');
+  } else if (IMPORTE_GROUP_COMMA.test(s)) {
+    normalized = s.replace(/,/g, '');
+  } else if (IMPORTE_DECIMAL_COMMA.test(s)) {
+    normalized = s.replace(',', '.');
+  } else {
+    return NaN;
+  }
+
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : NaN;
 }
 
