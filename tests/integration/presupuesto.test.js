@@ -103,10 +103,52 @@ describe('edición del presupuesto', () => {
     navTo('presupuesto');
     tab('ingresos');
 
+    // Aunque el botón esté oculto, un click disparado por código lo alcanzaría.
     byId('btn-edit-presup').click();
 
     expect($('#btn-save-presup')).toBeNull();
     expect(byId('presup-content').innerHTML).toContain('Sin ingresos este mes');
+  });
+
+  it('oculta el botón editar en el tab de ingresos', async () => {
+    await bootApp();
+    navTo('presupuesto');
+    expect(byId('btn-edit-presup').hidden).toBe(false);
+
+    tab('ingresos');
+
+    expect(byId('btn-edit-presup').hidden).toBe(true);
+    expect(getComputedStyle(byId('btn-edit-presup')).display).toBe('none');
+  });
+
+  it('vuelve a mostrar el botón editar al salir del tab de ingresos', async () => {
+    await bootApp();
+    navTo('presupuesto');
+    tab('ingresos');
+    tab('variables');
+    expect(byId('btn-edit-presup').hidden).toBe(false);
+
+    byId('btn-edit-presup').click();
+    expect($('#btn-save-presup')).not.toBeNull();
+  });
+
+  it('mantiene el botón oculto aunque el estado se repinte en el tab de ingresos', async () => {
+    await bootApp();
+    navTo('presupuesto');
+    tab('ingresos');
+
+    // Un re-render por cambio de mes no debe resucitar el botón.
+    clickMonth('presup-months', 2);
+
+    expect(byId('btn-edit-presup').hidden).toBe(true);
+  });
+
+  it('el estado vacío del tab de ingresos dice dónde se cargan', async () => {
+    await bootApp();
+    navTo('presupuesto');
+    tab('ingresos');
+
+    expect(byId('presup-content').innerHTML).toContain('Agregalos desde la pantalla Ingresos');
   });
 });
 

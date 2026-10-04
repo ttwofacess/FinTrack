@@ -23,6 +23,12 @@ export function renderPresupuesto(state, onMonthChange, onBudgetSave) {
     btn.classList.toggle('active', btn.dataset.tab === presupTab);
   });
 
+  // El tab de ingresos es sólo lectura: los ingresos se cargan desde su propia
+  // pantalla. Dejar el botón "editar" a la vista era un control que no hacía
+  // nada, porque openEditPresup() no tiene categorías que editar en ese tab.
+  const editBtn = document.getElementById('btn-edit-presup');
+  if (editBtn) editBtn.hidden = presupTab === 'ingresos';
+
   const budgets = state.budgets[mi] || {};
   const cats    = presupTab === 'fijos' ? CAT_FIJOS : presupTab === 'variables' ? CAT_VARIABLES : null;
   const el      = document.getElementById('presup-content');
@@ -40,7 +46,7 @@ function _renderIngresosTab(mi, state, el) {
   el.innerHTML =
     html`<div class="card-title">Total: ${fmt(totalIng)}</div>` +
     (ings.length === 0
-      ? '<div class="empty-state" style="padding:16px"><div class="empty-icon">💰</div>Sin ingresos este mes</div>'
+      ? '<div class="empty-state" style="padding:16px"><div class="empty-icon">💰</div>Sin ingresos este mes<br>Agregalos desde la pantalla Ingresos</div>'
       : ings.map(g => html`
           <div class="ingreso-list-item">
             <div class="ili-left">
@@ -137,6 +143,9 @@ export function initPresupuestoEvents(getState, onMonthChange, onBudgetSave) {
   });
 
   document.getElementById('btn-edit-presup').addEventListener('click', () => {
+    // Defensa: el botón está oculto en el tab de ingresos, pero un click
+    // disparado por código lo alcanzaría igual.
+    if (presupTab === 'ingresos') return;
     openEditPresup(getState(), (mi, updates) => {
       const persisted = onBudgetSave(mi, updates);
       renderPresupuesto(getState(), onMonthChange, onBudgetSave);
