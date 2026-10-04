@@ -10,7 +10,7 @@ import { closeModals, showToast, syncAllMonthSelectors, toastSinPersistencia } f
 import { renderDashboard }                  from './dashboard.js';
 import { renderGastos, initGastoModal, initGastosControls, openNewGasto, openEditGasto } from './gastos.js';
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
-import { renderIngresos, initIngresoModal }          from './ingresos.js';
+import { renderIngresos, initIngresoModal, initIngresosControls } from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
 import { initDonateModal }                           from './donate.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
@@ -238,6 +238,7 @@ document.getElementById('fab').addEventListener('click', () => openNewGasto(STAT
 initGastoModal(getS, onGastoSave, onGastoDelete);
 initGastosControls(getS, onGastoSave, onGastoDelete);
 initIngresoModal(getS, onIngresoSave);
+initIngresosControls(getS);
 initPresupuestoEvents(getS, onMonthChange, onBudgetSave);
 initDonateModal();
 initInstallButton();

@@ -63,6 +63,11 @@ export function mountIngresosDom() {
   document.body.innerHTML = `
     <div id="ing-months"></div>
     <div id="ing-summary-cards"></div>
+    <select id="ing-sort">
+      <option value="carga">Carga</option>
+      <option value="monto-desc">Monto ↓</option>
+      <option value="monto-asc">Monto ↑</option>
+    </select>
     <div id="ing-list"></div>
     <div class="modal-overlay" id="modal-ingreso"></div>
     <input id="fi-desc">

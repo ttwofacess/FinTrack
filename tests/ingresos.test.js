@@ -161,3 +161,108 @@ describe('initIngresoModal', () => {
     expect(document.getElementById('modal-ingreso').classList.contains('open')).toBe(true);
   });
 });
+
+// El estado de orden vive en el módulo y sobrevive entre tests, así que este
+// bloque importa ingresos.js de nuevo en cada uno.
+describe('renderIngresos — orden', () => {
+  let render, initControls;
+
+  const DATOS = [
+    ingreso({ id: 'a', descripcion: 'Sueldo',    importe: 1000000 }),
+    ingreso({ id: 'b', descripcion: 'Freelance', importe: 250000 }),
+    ingreso({ id: 'c', descripcion: 'Aguinaldo', importe: 500000 }),
+    ingreso({ id: 'd', descripcion: 'Otro mes',  importe: 999999, mes: 1 }),
+  ];
+
+  // `current` hace de STATE: getState() tiene que devolver lo último renderizado,
+  // como hace getS() en main.js.
+  let current;
+  const renderApp = (s) => render((current = s), noop);
+  const mes0 = () => build(DATOS, 0);
+  const mes1 = () => build(DATOS, 1);
+
+  const ids = () => [...document.querySelectorAll('#ing-list .ingreso-list-item')]
+    .map(el => el.querySelector('.ili-name').textContent);
+  const sort = () => document.getElementById('ing-sort');
+  const pick = (mode) => { sort().value = mode; sort().dispatchEvent(new Event('change')); };
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ renderIngresos: render, initIngresosControls: initControls } = await import('../ingresos.js'));
+    renderApp(mes0());
+    initControls(() => current);
+  });
+
+  // El default es 'carga' a propósito: hoy Ingresos muestra el más viejo
+  // primero, y poner 'recientes' reordenaría la lista al publicar la update.
+  it('defaults to carga, que es el orden de carga tal cual', () => {
+    expect(sort().value).toBe('carga');
+    expect(ids()).toEqual(['Sueldo', 'Freelance', 'Aguinaldo']);
+  });
+
+  it('monto-desc puts the biggest first', () => {
+    pick('monto-desc');
+    expect(ids()).toEqual(['Sueldo', 'Aguinaldo', 'Freelance']);
+  });
+
+  it('monto-asc puts the smallest first', () => {
+    pick('monto-asc');
+    expect(ids()).toEqual(['Freelance', 'Aguinaldo', 'Sueldo']);
+  });
+
+  it('only orders the selected month', () => {
+    pick('monto-desc');
+    renderApp(mes1());
+    expect(ids()).toEqual(['Otro mes']);
+  });
+
+  it('keeps the order when the month changes', () => {
+    pick('monto-asc');
+    renderApp(mes1());
+    expect(sort().value).toBe('monto-asc');
+
+    renderApp(mes0());
+    expect(sort().value).toBe('monto-asc');
+    expect(ids()).toEqual(['Freelance', 'Aguinaldo', 'Sueldo']);
+  });
+
+  it('vuelve a carga, y no a recientes, si el select no tiene la opción', () => {
+    // El fallback de sanitizeEnum es el primer modo de la lista; si ese primero
+    // fuera 'recientes', un select sin la opción elegida invertiría la lista.
+    pick('categoria');
+    expect(sort().value).toBe('carga');
+    expect(ids()).toEqual(['Sueldo', 'Freelance', 'Aguinaldo']);
+  });
+
+  it('does not rebuild the summary cards when the order changes', () => {
+    const cardsHtml = document.getElementById('ing-summary-cards').innerHTML;
+    pick('monto-desc');
+    expect(document.getElementById('ing-summary-cards').innerHTML).toBe(cardsHtml);
+  });
+
+  it('keeps the empty state when there is nothing to sort', () => {
+    renderApp(build([], 0));
+    pick('monto-desc');
+    expect(document.querySelector('#ing-list .empty-state')).not.toBeNull();
+    expect(document.querySelectorAll('#ing-list .ingreso-list-item')).toHaveLength(0);
+  });
+
+  it('resynchroniza el select si el DOM lo restauró por su cuenta', () => {
+    pick('monto-desc');
+    sort().value = 'carga';
+    renderApp(mes0());
+    expect(sort().value).toBe('monto-desc');
+  });
+});
+
+describe('renderIngresos sin el selector de orden', () => {
+  it('lista igual si el HTML no trae #ing-sort', () => {
+    document.body.innerHTML = `
+      <div id="ing-months"></div>
+      <div id="ing-summary-cards"></div>
+      <div id="ing-list"></div>`;
+
+    expect(() => renderIngresos(build([ingreso({ id: 'x' })]), noop)).not.toThrow();
+    expect(document.querySelectorAll('#ing-list .ingreso-list-item')).toHaveLength(1);
+  });
+});

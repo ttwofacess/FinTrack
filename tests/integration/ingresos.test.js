@@ -160,3 +160,65 @@ describe('ingresos en el resto de la app', () => {
     expect(byId('presup-content').innerHTML).toContain('Sin ingresos este mes');
   });
 });
+
+describe('orden del detalle de ingresos', () => {
+  const conVarios = () => seeded([
+    { id: 'a', descripcion: 'Sueldo',    importe: 1200000, mes: 0, tipo: 'sueldo' },
+    { id: 'b', descripcion: 'Freelance', importe: 250000,  mes: 0, tipo: 'freelance' },
+    { id: 'c', descripcion: 'Aguinaldo', importe: 600000,  mes: 0, tipo: 'aguinaldo' },
+  ]);
+
+  /** Cambia el selector de orden y dispara el change. */
+  const ordenar = (modo) => {
+    const el = byId('ing-sort');
+    el.value = modo;
+    el.dispatchEvent(new Event('change'));
+  };
+
+  it('arranca en orden de carga, igual que antes del selector', async () => {
+    await bootApp(conVarios());
+    navTo('ingresos');
+
+    expect(byId('ing-sort').value).toBe('carga');
+    expect(listNames()).toEqual(['Sueldo', 'Freelance', 'Aguinaldo']);
+  });
+
+  it('ordena por monto', async () => {
+    await bootApp(conVarios());
+    navTo('ingresos');
+
+    ordenar('monto-desc');
+    expect(listNames()).toEqual(['Sueldo', 'Aguinaldo', 'Freelance']);
+
+    ordenar('monto-asc');
+    expect(listNames()).toEqual(['Freelance', 'Aguinaldo', 'Sueldo']);
+  });
+
+  it('mantiene el orden al cambiar de mes y al volver a la pantalla', async () => {
+    await bootApp(conVarios());
+    navTo('ingresos');
+    ordenar('monto-desc');
+
+    // Febrero no tiene ingresos: el select tiene que conservar el orden igual.
+    clickMonth('ing-months', 1);
+    expect(byId('ing-sort').value).toBe('monto-desc');
+
+    clickMonth('ing-months', 0);
+    expect(listNames()).toEqual(['Sueldo', 'Aguinaldo', 'Freelance']);
+
+    navTo('dashboard');
+    navTo('ingresos');
+    expect(byId('ing-sort').value).toBe('monto-desc');
+    expect(listNames()).toEqual(['Sueldo', 'Aguinaldo', 'Freelance']);
+  });
+
+  it('no escribe nada en localStorage al ordenar', async () => {
+    await bootApp(conVarios());
+    navTo('ingresos');
+    const antes = getStoredState();
+
+    ordenar('monto-desc');
+
+    expect(getStoredState()).toEqual(antes);
+  });
+});

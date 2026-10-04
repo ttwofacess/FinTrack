@@ -444,12 +444,14 @@ describe('renderGastos — búsqueda y orden', () => {
     });
 
     it('falls back to recientes when the select has no matching option', () => {
-      // El select no tiene opción 'carga': el navegador deja el value vacío y
-      // sanitizeEnum lo vuelve a 'recientes' en vez de romper el render.
+      // El select no tiene opción 'categoria' fuera de sí mismo ni 'carga': el
+      // navegador deja el value vacío y sanitizeEnum lo vuelve a 'recientes'.
       pick('carga');
+      expect(sort().value).toBe('recientes');
       expect(ids()).toEqual(['c', 'b', 'a']);
 
       pick('inventado');
+      expect(sort().value).toBe('recientes');
       expect(ids()).toEqual(['c', 'b', 'a']);
     });
 

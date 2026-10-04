@@ -8,13 +8,18 @@
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
 import { fmt, catInfo, gastosByMonth, uid, validateGasto, html, raw,
-         matchesQuery, sortRecords, sanitizeEnum, SORT_MODES } from './utils.js';
+         matchesQuery, sortRecords, sanitizeEnum } from './utils.js';
 import { buildMonthSelector, closeModals, showToast, toastSinPersistencia, gastoItemHTML } from './ui.js';
 
 let gastoFilter   = 'all';
 let gastoQuery    = '';
 let gastoSort     = 'recientes';
 let editingGastoId = null;
+
+// El primer elemento es el default de la pantalla porque sanitizeEnum cae al
+// primero ante un valor desconocido: tiene que devolver 'recientes', no
+// cualquier otro modo.
+const GASTO_SORT_MODES = ['recientes', 'monto-desc', 'monto-asc', 'categoria'];
 
 /**
  * @param {object}   state
@@ -141,7 +146,10 @@ export function initGastosControls(getState, onSave, onDelete) {
     if (e.key === 'Enter') searchEl.blur();
   });
   sortEl?.addEventListener('change', () => {
-    gastoSort = sanitizeEnum(sortEl.value, SORT_MODES);
+    gastoSort = sanitizeEnum(sortEl.value, GASTO_SORT_MODES);
+    // Si el value no era una opción real el select queda en blanco: se escribe
+    // el modo ya saneado para que el control siempre muestre algo.
+    sortEl.value = gastoSort;
     refreshList();
   });
 }
