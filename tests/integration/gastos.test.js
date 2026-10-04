@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  bootApp, stubBrowserApis, restoreBrowserApis,
+  bootApp, restartApp, stubBrowserApis, restoreBrowserApis,
   $, $$, byId, navTo, clickMonth, toastText, getStoredState,
   submitGasto, openGastoFromList, listNames, stateWith,
 } from '../helpers/app.js';
@@ -288,5 +288,180 @@ describe('reactividad entre pantallas', () => {
     const alimentacion = $$('#presup-content .presup-item')
       .find(el => el.textContent.includes('Alimentación'));
     expect(alimentacion.querySelector('.presup-sub').textContent).toBe('25% ejecutado');
+  });
+});
+
+describe('búsqueda y orden', () => {
+  const seedBusqueda = () => bootApp(stateWith((s) => {
+    s.selectedMonth = 0;
+    s.gastos = [
+      nuevoGasto({ id: 'a', detalle: 'Café con leche', importe: 3000, mes: 0 }),
+      nuevoGasto({ id: 'b', detalle: 'Super Coto', importe: 12000, mes: 0 }),
+      nuevoGasto({ id: 'c', detalle: 'Cine', importe: 5000, categoria: 'salidas', medio: 'credito', mes: 0 }),
+    ];
+  }));
+
+  /** Escribe en el buscador y dispara el input, como el usuario al teclear. */
+  const buscar = (query) => {
+    const el = byId('gastos-search');
+    el.value = query;
+    el.dispatchEvent(new Event('input'));
+  };
+
+  /** Cambia el selector de orden y dispara el change. */
+  const ordenar = (modo) => {
+    const el = byId('gastos-sort');
+    el.value = modo;
+    el.dispatchEvent(new Event('change'));
+  };
+
+  const ids = () => $$('#gastos-list .gasto-item').map(el => el.dataset.id);
+
+  it('filtra por detalle ignorando mayúsculas y tildes', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+
+    buscar('cafe');
+
+    expect(listNames('gastos-list')).toEqual(['Café con leche']);
+    expect(byId('gastos-count').textContent).toBe('1 de 3 registros');
+    expect(byId('gastos-total-pill').textContent).toBe('$3.000 total');
+  });
+
+  it('busca por palabras sueltas y por nombre de categoría', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+
+    buscar('coto super');
+    expect(listNames('gastos-list')).toEqual(['Super Coto']);
+
+    buscar('salidas');
+    expect(listNames('gastos-list')).toEqual(['Cine']);
+  });
+
+  it('ordena por monto y por categoría', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+
+    ordenar('monto-desc'); expect(ids()).toEqual(['b', 'c', 'a']);
+    ordenar('monto-asc');  expect(ids()).toEqual(['a', 'c', 'b']);
+    ordenar('categoria');  expect(ids()).toEqual(['b', 'a', 'c']);
+    ordenar('recientes');  expect(ids()).toEqual(['c', 'b', 'a']);
+  });
+
+  it('combina la búsqueda con el chip de categoría', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+
+    $('#gastos-filters .filter-chip[data-cat="salidas"]').click();
+    buscar('cafe');
+
+    expect(listNames('gastos-list')).toEqual([]);
+    expect(byId('gastos-count').textContent).toBe('0 de 1 registros');
+    expect($('#gastos-list .empty-state').textContent).toContain('Sin resultados para');
+  });
+
+  it('no escribe nada en localStorage al buscar ni al ordenar', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+    const antes = getStoredState();
+
+    buscar('cafe');
+    ordenar('monto-desc');
+
+    expect(getStoredState()).toEqual(antes);
+  });
+
+  it('mantiene búsqueda y orden al salir y volver a la pantalla', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+    buscar('cafe');
+    ordenar('monto-asc');
+
+    navTo('dashboard');
+    navTo('gastos');
+
+    expect(byId('gastos-search').value).toBe('cafe');
+    expect(byId('gastos-sort').value).toBe('monto-asc');
+    expect(listNames('gastos-list')).toEqual(['Café con leche']);
+  });
+
+  it('limpia la búsqueda al cambiar de mes y deja el orden', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+    buscar('cafe');
+    ordenar('monto-desc');
+
+    clickMonth('gastos-months', 1);
+
+    expect(byId('gastos-search').value).toBe('');
+    expect(byId('gastos-sort').value).toBe('monto-desc');
+  });
+
+  it('no reconstruye el selector de meses al teclear', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+    const mesBtn = $('#gastos-months .month-btn');
+
+    buscar('cafe');
+
+    expect($('#gastos-months .month-btn')).toBe(mesBtn);
+  });
+
+  it('un gasto guardado que no matchea la búsqueda igual se persiste', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+    buscar('cafe');
+
+    crearGasto(nuevoGasto({ detalle: 'Panadería', importe: '700', mes: 0 }));
+
+    expect(toastText()).toContain('Gasto guardado');
+    expect(listNames('gastos-list')).toEqual(['Café con leche']);
+    // El contador sube a 4 aunque el gasto nuevo no aparezca: es la señal de
+    // que se guardó algo que la búsqueda está ocultando.
+    expect(byId('gastos-count').textContent).toBe('1 de 4 registros');
+    expect(getStoredState().gastos).toHaveLength(4);
+
+    buscar('');
+    expect(listNames('gastos-list')).toHaveLength(4);
+  });
+
+  it('un gasto editado desde la lista filtrada se actualiza', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+    buscar('coto');
+
+    openGastoFromList(0);
+    byId('f-importe').value = '13500';
+    byId('btn-save-gasto').click();
+
+    buscar('');
+    expect(getStoredState().gastos.find(g => g.id === 'b').importe).toBe(13500);
+  });
+
+  it('no crea elementos con markup que venga de la query', async () => {
+    const payload = '<img src=x onerror="window.__xss=true">';
+    await seedBusqueda();
+    navTo('gastos');
+
+    buscar(payload);
+
+    expect($('#gastos-list img')).toBeNull();
+    expect($('#gastos-list .empty-state').textContent).toContain(payload);
+    expect(window.__xss).toBeUndefined();
+  });
+
+  it('la búsqueda y el orden sobreviven a un reinicio de la app solo si el usuario los reaplica', async () => {
+    await seedBusqueda();
+    navTo('gastos');
+    buscar('cafe');
+
+    // Búsqueda y orden son estado efímero a propósito: no van al store.
+    await restartApp();
+    navTo('gastos');
+
+    expect(byId('gastos-search').value).toBe('');
+    expect(byId('gastos-sort').value).toBe('recientes');
+    expect(listNames('gastos-list')).toHaveLength(3);
   });
 });

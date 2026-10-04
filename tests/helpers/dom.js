@@ -18,6 +18,13 @@ const addToast = () => {
 export function mountGastosDom() {
   document.body.innerHTML = `
     <div id="gastos-months"></div>
+    <input id="gastos-search" type="search">
+    <select id="gastos-sort">
+      <option value="recientes">Recientes</option>
+      <option value="monto-desc">Monto ↓</option>
+      <option value="monto-asc">Monto ↑</option>
+      <option value="categoria">Categoría</option>
+    </select>
     <div id="gastos-filters"></div>
     <span id="gastos-count"></span>
     <span id="gastos-total-pill"></span>

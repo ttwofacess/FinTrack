@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { escapeHtml, html, raw } from '../utils.js';
 import { renderIngresos } from '../ingresos.js';
-import { renderGastos, openNewGasto } from '../gastos.js';
+import { renderGastos, openNewGasto, initGastosControls } from '../gastos.js';
 import { renderDashboard } from '../dashboard.js';
 import { initPresupuestoEvents } from '../presupuesto.js';
 import { defaultState } from '../store.js';
@@ -132,6 +132,44 @@ describe('XSS regression — gastos', () => {
     renderGastos(build({ gastos: [gasto({ categoria: '"><b>x</b>' })] }), () => {}, () => {}, () => {});
     const chip = document.querySelector('#gastos-filters .filter-chip:not([data-cat="all"]):not([data-cat="credito"])');
     expect(chip.dataset.cat).toBe('"><b>x</b>');
+  });
+});
+
+describe('XSS regression — búsqueda de gastos', () => {
+  beforeEach(() => {
+    mountGastosDom();
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  /** Escribe una query maliciosa como haría el usuario y dispara el input. */
+  const search = (query) => {
+    renderGastos(build({ gastos: [gasto({ detalle: 'Compra' })] }), () => {}, () => {}, () => {});
+    initGastosControls(() => build({ gastos: [gasto({ detalle: 'Compra' })] }), () => {}, () => {});
+    const el = document.getElementById('gastos-search');
+    el.value = query;
+    el.dispatchEvent(new Event('input'));
+    return document.getElementById('gastos-list');
+  };
+
+  // La query del usuario se imprime en el mensaje de "sin resultados", así que
+  // es el único texto que la búsqueda mete en el DOM.
+  it('does not execute markup injected via the search query', () => {
+    const list = search(XSS);
+    expectNoInjectedElement(list);
+    expect(list.querySelector('.empty-state').textContent).toContain(XSS);
+  });
+
+  it('does not execute markup injected via the search query in the count', () => {
+    search(XSS);
+    // El contador nunca interpola la query, pero el mensaje de al lado sí:
+    // conviene que ambos queden como texto.
+    expect(document.getElementById('gastos-count').textContent).toBe('0 de 1 registros');
+  });
+
+  it('treats a markup-looking query as plain text, not as markup to keep', () => {
+    const list = search('<b>hola</b>');
+    expect(list.querySelector('b')).toBeNull();
+    expect(list.querySelector('.empty-state').textContent).toContain('<b>hola</b>');
   });
 });
 
