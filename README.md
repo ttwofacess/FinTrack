@@ -12,6 +12,7 @@ FinTrack es una aplicación web ligera, moderna y **completamente gratuita** dis
 - **Control de Presupuesto (Budget vs Real)**: Define límites mensuales por categoría y monitorea cuánto has ejecutado en tiempo real con alertas visuales.
 - **Seguimiento de Ingresos**: Registra tus fuentes de ingresos (Sueldo, Freelance, Inversiones) y visualiza proyecciones anuales.
 - **Historial Detallado**: Filtra y revisa tus movimientos por mes y categoría.
+- **Búsqueda y Orden en Gastos**: Encontrá un gasto del mes escribiendo parte de su nombre (sin tildes ni mayúsculas) y ordená la lista por monto o por categoría.
 - **Exportación de Datos**: Descarga toda tu información en formato JSON para tener un respaldo siempre a mano.
 - **Privacidad Total**: Tus datos se guardan localmente en tu navegador (LocalStorage). Nada se sube a servidores externos.
 
