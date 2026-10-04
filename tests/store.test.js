@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { defaultState, getState, setState, normalizeState } from '../store.js';
 import { ALL_CATS, MESES } from '../constants.js';
 
@@ -136,6 +136,20 @@ describe('setState / getState', () => {
     expect(loaded.selectedMonth).toBe(7);
     expect(loaded.ingresos).toEqual(s.ingresos);
     expect(loaded.budgets[7].alimentacion).toBe(30000);
+  });
+
+  it('reports success when the write goes through', () => {
+    expect(setState(defaultState())).toBe(true);
+  });
+
+  it('swallows storage failures instead of breaking the caller', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    expect(setState(defaultState())).toBe(false);
+    expect(warn).toHaveBeenCalled();
   });
 
   it('returns a default state when nothing is stored', () => {

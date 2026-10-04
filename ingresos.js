@@ -6,7 +6,7 @@
 
 import { MESES, CUR_YEAR } from './constants.js';
 import { fmt, uid, ingresosByMonth, totalIngresosMonth, validateIngreso, html } from './utils.js';
-import { buildMonthSelector, closeModals, showToast } from './ui.js';
+import { buildMonthSelector, closeModals, showToast, toastSinPersistencia } from './ui.js';
 
 /**
  * @param {object}   state
@@ -70,7 +70,10 @@ export function openNewIngreso(selectedMonth) {
   document.getElementById('modal-ingreso').classList.add('open');
 }
 
-/** Registra listeners del modal de ingresos (llamar una sola vez en init) */
+/**
+ * Registra listeners del modal de ingresos (llamar una sola vez en init).
+ * @param {Function} onSave — (ingreso) => boolean|undefined; false = no persistido
+ */
 export function initIngresoModal(getState, onSave) {
   document.getElementById('btn-add-ingreso').addEventListener('click', () => {
     openNewIngreso(getState().selectedMonth);
@@ -90,9 +93,11 @@ export function initIngresoModal(getState, onSave) {
       return;
     }
 
-    onSave({ id: uid(), ...result.data });
+    const persisted = onSave({ id: uid(), ...result.data });
     closeModals();
-    showToast('✓ Ingreso guardado');
+    // false = el estado quedó sólo en memoria (ver store.setState).
+    if (persisted === false) toastSinPersistencia('Ingreso');
+    else showToast('✓ Ingreso guardado');
   });
 }
 

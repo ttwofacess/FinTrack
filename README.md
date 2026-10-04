@@ -25,13 +25,18 @@ Al ser una aplicación web estática, no requiere instalación compleja:
 
 ## 🧪 Tests
 
-El proyecto incluye tests unitarios con [Vitest](https://vitest.dev) sobre un entorno `jsdom`:
+Tests con [Vitest](https://vitest.dev) sobre un entorno `jsdom`, en dos grupos:
+
+- **Unitarios** (`tests/*.test.js`): cada módulo por separado, con fixtures de DOM.
+- **Integración** (`tests/integration/`): levantan la app real —el `index.html` de verdad más `main.js`— y la manejan por el DOM, para cubrir el cableado entre módulos, la persistencia y los flujos completos.
 
 ```bash
-pnpm install       # instala las devDependencies
-pnpm test          # corre la suite una vez
-pnpm test:watch    # modo watch
-pnpm test:coverage # reporte de cobertura en coverage/
+pnpm install              # instala las devDependencies
+pnpm test                 # corre todo una vez
+pnpm test:unit            # sólo los unitarios
+pnpm test:integration     # sólo los de integración
+pnpm test:watch           # modo watch
+pnpm test:coverage        # reporte de cobertura en coverage/
 ```
 
 ## 🛠️ Tecnologías Utilizadas

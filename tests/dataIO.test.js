@@ -158,6 +158,18 @@ describe('importData', () => {
     expect(data.gastos[0].medio).toBe('debito');
   });
 
+  it('warns instead of confirming when the import could not be persisted', async () => {
+    const onSuccess = vi.fn(() => false);
+    importData(jsonFile(JSON.stringify(defaultState())), onSuccess);
+    await vi.waitFor(() => expect(toastText()).toContain('Importación sin guardar'));
+    expect(toastText()).not.toContain('Datos importados');
+  });
+
+  it('confirms the import when onSuccess does not report a failure', async () => {
+    importData(jsonFile(JSON.stringify(defaultState())), vi.fn());
+    await vi.waitFor(() => expect(toastText()).toContain('Datos importados'));
+  });
+
   it('logs all validation errors for debugging', async () => {
     const state = defaultState();
     state.gastos.push({ id: '1', detalle: '', importe: 1, mes: 0, categoria: 'salidas', medio: 'efectivo' });

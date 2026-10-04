@@ -5,7 +5,7 @@
 // ============================================================
 
 import { CUR_YEAR } from './constants.js';
-import { showToast } from './ui.js';
+import { showToast, toastSinPersistencia } from './ui.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
 import { normalizeState } from './store.js';
 
@@ -83,7 +83,8 @@ function validateImportedState(data) {
 /**
  * Lee un archivo JSON e invoca onSuccess con los datos si son válidos.
  * @param {File}     file
- * @param {Function} onSuccess — (importedState) => void
+ * @param {Function} onSuccess — (importedState) => boolean|undefined;
+ *   devuelve false si el estado importado no llegó a persistirse
  */
 export function importData(file, onSuccess) {
   if (!file) return;
@@ -93,8 +94,9 @@ export function importData(file, onSuccess) {
       const data = JSON.parse(ev.target.result);
       const validation = validateImportedState(data);
       if (validation.ok) {
-        onSuccess(validation.data);
-        showToast('✓ Datos importados');
+        const persisted = onSuccess(validation.data);
+        if (persisted === false) toastSinPersistencia('Importación');
+        else showToast('✓ Datos importados');
       } else {
         // Show the first error; log all for debugging
         console.warn('[importData] Validation errors:', validation.errors);

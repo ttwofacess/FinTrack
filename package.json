@@ -6,7 +6,11 @@
   "description": "Control de gastos personal — PWA vanilla JS",
   "scripts": {
     "test": "vitest run",
+    "test:unit": "vitest run --exclude \"**/node_modules/**\" --exclude \"tests/integration/**\"",
+    "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
+    "test:watch:unit": "vitest --exclude \"**/node_modules/**\" --exclude \"tests/integration/**\"",
+    "test:watch:integration": "vitest tests/integration",
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {

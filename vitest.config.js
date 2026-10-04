@@ -9,7 +9,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['*.js'],
-      exclude: ['main.js', 'sw.js'],
+      // sw.js queda fuera porque corre en el contexto del service worker, que
+      // jsdom no replica; medirlo siempre da 0% y no aporta señal.
+      // main.js sí se mide: los tests de integración lo importan de verdad.
+      exclude: ['sw.js', 'vitest.config.js'],
       reporter: ['text', 'html'],
     },
   },

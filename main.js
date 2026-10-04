@@ -6,7 +6,7 @@
 // ============================================================
 
 import { getState, setState, defaultState } from './store.js';
-import { closeModals, showToast }           from './ui.js';
+import { closeModals, showToast, syncAllMonthSelectors, toastSinPersistencia } from './ui.js';
 import { renderDashboard }                  from './dashboard.js';
 import { renderGastos, initGastoModal, openNewGasto, openEditGasto } from './gastos.js';
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
@@ -21,10 +21,25 @@ let deferredInstallPrompt = null;
 
 // ── Helpers de acceso ────────────────────────────────────
 const getS  = () => STATE;
+
+// saveS devuelve false si el estado no llegó a localStorage. Los callbacks de
+// guardado usan ese valor para no mostrar un "✓ guardado" cuando en realidad el
+// cambio se quedó sólo en memoria.
 const saveS = () => setState(STATE);
 
+let refreshing = false;
+
 function registerServiceWorker() {
+  // Todo lo del service worker cuelga de esteAPI: el listener de
+  // controllerchange va acá también porque registrarlo a nivel de módulo
+  // reventaba la app entera en un browser sin soporte.
   if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
@@ -46,13 +61,6 @@ function registerServiceWorker() {
       });
   });
 }
-
-let refreshing = false;
-navigator.serviceWorker.addEventListener('controllerchange', () => {
-  if (refreshing) return;
-  refreshing = true;
-  window.location.reload();
-});
 
 function initInstallButton() {
   const installButton = document.getElementById('btn-install-app');
@@ -85,6 +93,15 @@ window.addEventListener('appinstalled', () => {
 });
 
 // ── Navegación ────────────────────────────────────────────
+//
+// El dashboard muestra datos de todas las colecciones, así que cualquier
+// cambio en gastos, ingresos o budgets tiene que refrescarlo. navigate() lo
+// re-renderiza al entrar a la pantalla, pero mientras el usuario está en otra
+// pantalla el DOM queda desactualizado si sólo se repinta la pantalla activa.
+function renderDashboardActual() {
+  renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+}
+
 function navigate(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -92,7 +109,7 @@ function navigate(screenId) {
   document.querySelector(`.nav-item[data-screen="${screenId}"]`).classList.add('active');
   document.getElementById('fab').style.display = screenId === 'gastos' ? 'flex' : 'none';
 
-  if (screenId === 'dashboard')   renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+  if (screenId === 'dashboard')   renderDashboardActual();
   if (screenId === 'gastos')      renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
   if (screenId === 'presupuesto') renderPresupuesto(STATE, onMonthChange, onBudgetSave);
   if (screenId === 'ingresos')    renderIngresos(STATE, onMonthChange);
@@ -105,8 +122,11 @@ document.querySelectorAll('.nav-item').forEach(el => {
 // ── Callbacks de mes ─────────────────────────────────────
 function onMonthChange(mi) {
   STATE.selectedMonth = mi;
-  saveS();
-  // Re-renderiza la pantalla activa
+  if (!saveS()) toastSinPersistencia('Cambio de mes');
+  // El selector de la pantalla activa se re-renderiza con navigate(), pero las
+  // otras ya tienen botones construidos: hay que sincronizarlos o queda
+  // resaltado el mes viejo en las pantallas que el usuario tiene ocultas.
+  syncAllMonthSelectors(mi);
   const active = document.querySelector('.screen.active');
   if (active) navigate(active.id.replace('screen-', ''));
 }
@@ -132,16 +152,18 @@ function onGastoSave(gasto) {
     const { _edit: _, ...toSave } = clean;
     STATE.gastos.push(toSave);
   }
-  saveS();
+  const persisted = saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
-  renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+  renderDashboardActual();
+  return persisted;
 }
 
 function onGastoDelete(id) {
   STATE.gastos = STATE.gastos.filter(g => g.id !== id);
-  saveS();
+  const persisted = saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
-  renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+  renderDashboardActual();
+  return persisted;
 }
 
 // ── Callbacks de ingresos ────────────────────────────────
@@ -153,8 +175,10 @@ function onIngresoSave(ingreso) {
     return;
   }
   STATE.ingresos.push({ id, ...result.data });
-  saveS();
+  const persisted = saveS();
   renderIngresos(STATE, onMonthChange);
+  renderDashboardActual();
+  return persisted;
 }
 
 // ── Callbacks de presupuesto ─────────────────────────────
@@ -167,30 +191,44 @@ function onBudgetSave(mi, updates) {
 
   if (!STATE.budgets[mi]) STATE.budgets[mi] = {};
   Object.assign(STATE.budgets[mi], result.data);
-  saveS();
+  const persisted = saveS();
   renderPresupuesto(STATE, onMonthChange, onBudgetSave);
+  renderDashboardActual();
+  return persisted;
 }
 
 // ── Import / export / reset ──────────────────────────────
 initDataIO(getS, (importedState) => {
   STATE = importedState;
-  saveS();
+  const persisted = saveS();
   navigate('dashboard');
+  return persisted;
 });
 
 document.getElementById('btn-reset-data').addEventListener('click', () => {
   if (confirm('¿Estás seguro de que querés eliminar TODOS los datos? Esta acción es permanente.')) {
     STATE = defaultState();
-    saveS();
+    const persisted = saveS();
     navigate('dashboard');
-    showToast('🗑️ Datos eliminados');
+    if (persisted) showToast('🗑️ Datos eliminados');
+    // Si no se pudo escribir, los datos siguen intactos en el almacenamiento:
+    // decir "eliminados" sería falso.
+    else toastSinPersistencia('Borrado');
   }
 });
 
 // ── Modales ──────────────────────────────────────────────
-closeModals; // asegurar que está importado
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => { if (e.target === overlay) closeModals(); });
+});
+
+// Escape es el gesto natural para descartar un modal, pero en mobile el overlay
+// comparte zona con el botón de guardar: sin esto, touch fuera es la única
+// salida y es fácil cerrarlo por error después de guardar. Se comportan como el
+// click en el overlay: se cierran todos los modales abiertos.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  closeModals();
 });
 
 // ── FAB ──────────────────────────────────────────────────

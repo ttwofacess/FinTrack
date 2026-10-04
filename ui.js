@@ -39,6 +39,20 @@ export function closeModals() {
 }
 
 /**
+ * Toast para un cambio que se aplicó en memoria pero no llegó a persistirse.
+ * @param {string} que — qué se intentó guardar, para que el mensaje sea accionable
+ *
+ * store.setState() devuelve false cuando localStorage falla (cuota llena, modo
+ * privado, permisos). La app sigue andando con el estado en memoria, así que sin
+ * este aviso el usuario cierra la pestaña creyendo que guardó y lo pierde todo.
+ */
+export function toastSinPersistencia(que) {
+  showToast(`⚠️ ${que} sin guardar: el almacenamiento del navegador está lleno o bloqueado`, {
+    duration: 8000,
+  });
+}
+
+/**
  * Construye un selector de meses en el elemento indicado.
  * @param {string} containerId  — id del contenedor
  * @param {number} selectedMonth — mes activo

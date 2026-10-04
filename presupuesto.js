@@ -6,7 +6,7 @@
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
 import { fmt, ingresosByMonth, totalIngresosMonth, gastoByCat, validateBudgetUpdate, html } from './utils.js';
-import { buildMonthSelector, showToast } from './ui.js';
+import { buildMonthSelector, showToast, toastSinPersistencia } from './ui.js';
 
 let presupTab = 'fijos';
 
@@ -22,6 +22,12 @@ export function renderPresupuesto(state, onMonthChange, onBudgetSave) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === presupTab);
   });
+
+  // El tab de ingresos es sólo lectura: los ingresos se cargan desde su propia
+  // pantalla. Dejar el botón "editar" a la vista era un control que no hacía
+  // nada, porque openEditPresup() no tiene categorías que editar en ese tab.
+  const editBtn = document.getElementById('btn-edit-presup');
+  if (editBtn) editBtn.hidden = presupTab === 'ingresos';
 
   const budgets = state.budgets[mi] || {};
   const cats    = presupTab === 'fijos' ? CAT_FIJOS : presupTab === 'variables' ? CAT_VARIABLES : null;
@@ -40,7 +46,7 @@ function _renderIngresosTab(mi, state, el) {
   el.innerHTML =
     html`<div class="card-title">Total: ${fmt(totalIng)}</div>` +
     (ings.length === 0
-      ? '<div class="empty-state" style="padding:16px"><div class="empty-icon">💰</div>Sin ingresos este mes</div>'
+      ? '<div class="empty-state" style="padding:16px"><div class="empty-icon">💰</div>Sin ingresos este mes<br>Agregalos desde la pantalla Ingresos</div>'
       : ings.map(g => html`
           <div class="ingreso-list-item">
             <div class="ili-left">
@@ -74,7 +80,8 @@ function _renderBudgetTab(cats, budgets, mi, state, el) {
 /**
  * Activa el modo edición inline del presupuesto.
  * @param {object}   state
- * @param {Function} onBudgetSave — (mi, { catKey: value }) => void
+ * @param {Function} onBudgetSave — (mi, { catKey: value }) => boolean|undefined;
+ *   false = el budget no llegó a persistirse
  */
 export function openEditPresup(state, onBudgetSave) {
   const mi      = state.selectedMonth;
@@ -120,8 +127,9 @@ export function openEditPresup(state, onBudgetSave) {
       return;
     }
 
-    onBudgetSave(mi, result.data);
-    showToast('✓ Budget guardado');
+    const persisted = onBudgetSave(mi, result.data);
+    if (persisted === false) toastSinPersistencia('Presupuesto');
+    else showToast('✓ Budget guardado');
   });
 }
 
@@ -135,9 +143,13 @@ export function initPresupuestoEvents(getState, onMonthChange, onBudgetSave) {
   });
 
   document.getElementById('btn-edit-presup').addEventListener('click', () => {
+    // Defensa: el botón está oculto en el tab de ingresos, pero un click
+    // disparado por código lo alcanzaría igual.
+    if (presupTab === 'ingresos') return;
     openEditPresup(getState(), (mi, updates) => {
-      onBudgetSave(mi, updates);
+      const persisted = onBudgetSave(mi, updates);
       renderPresupuesto(getState(), onMonthChange, onBudgetSave);
+      return persisted;
     });
   });
 }
