@@ -1,16 +1,19 @@
 // ============================================================
 // gastos.js — Pantalla Gastos + Modal de gasto
-// Responsabilidad: renderizar la lista de gastos con filtros
-// y gestionar el ciclo de vida del modal (nuevo / editar /
-// eliminar). No persiste datos directamente; delega en el
-// callback onSave / onDelete.
+// Responsabilidad: renderizar la lista de gastos con filtros,
+// búsqueda y orden, y gestionar el ciclo de vida del modal
+// (nuevo / editar / eliminar). No persiste datos directamente;
+// delega en el callback onSave / onDelete.
 // ============================================================
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
-import { fmt, catInfo, gastosByMonth, uid, validateGasto, html, raw } from './utils.js';
+import { fmt, catInfo, gastosByMonth, uid, validateGasto, html, raw,
+         matchesQuery, sortRecords, sanitizeEnum, SORT_MODES } from './utils.js';
 import { buildMonthSelector, closeModals, showToast, toastSinPersistencia, gastoItemHTML } from './ui.js';
 
 let gastoFilter   = 'all';
+let gastoQuery    = '';
+let gastoSort     = 'recientes';
 let editingGastoId = null;
 
 /**
@@ -21,12 +24,27 @@ let editingGastoId = null;
  */
 export function renderGastos(state, onMonthChange, onSave, onDelete) {
   const mi    = state.selectedMonth;
-  buildMonthSelector('gastos-months', mi, (i) => { gastoFilter = 'all'; onMonthChange(i); });
+  buildMonthSelector('gastos-months', mi, (i) => {
+    gastoFilter = 'all';
+    gastoQuery  = '';          // igual que el chip: al cambiar de mes se limpia
+    onMonthChange(i);
+  });
+
+  // El estado del módulo sobrevive al salir y volver a la pantalla, así que los
+  // controles hay que sincronizarlos con él en cada render.
+  _syncSearchControls();
 
   const gastos = gastosByMonth(state, mi);
   
   _renderFilters(gastos, state, onMonthChange, onSave, onDelete);
   _renderList(gastos, state, onSave, onDelete);
+}
+
+function _syncSearchControls() {
+  const searchEl = document.getElementById('gastos-search');
+  const sortEl   = document.getElementById('gastos-sort');
+  if (searchEl && searchEl.value !== gastoQuery) searchEl.value = gastoQuery;
+  if (sortEl && sortEl.value !== gastoSort)      sortEl.value   = gastoSort;
 }
 
 function _renderFilters(gastos, state, onMonthChange, onSave, onDelete) {
@@ -50,26 +68,81 @@ function _renderFilters(gastos, state, onMonthChange, onSave, onDelete) {
 }
 
 function _renderList(gastos, state, onSave, onDelete) {
-  let filtered = gastos;
+  // 1) chip de categoría / crédito
+  let base = gastos;
   if (gastoFilter === 'credito') {
-    filtered = gastos.filter(g => g.medio === 'credito');
+    base = gastos.filter(g => g.medio === 'credito');
   } else if (gastoFilter !== 'all') {
-    filtered = gastos.filter(g => g.categoria === gastoFilter);
+    base = gastos.filter(g => g.categoria === gastoFilter);
   }
-  
+
+  // 2) búsqueda, por detalle y por nombre de categoría
+  const searching = gastoQuery.trim() !== '';
+  const filtered  = searching
+    ? base.filter(g => matchesQuery(gastoQuery, g.detalle, catInfo(g.categoria).label))
+    : base;
+
+  // 3) contador y total siempre sobre lo que se ve
   const total = filtered.reduce((s, g) => s + (g.importe || 0), 0);
-  document.getElementById('gastos-count').textContent      = filtered.length + ' registros';
+  document.getElementById('gastos-count').textContent = searching
+    ? `${filtered.length} de ${base.length} registros`
+    : `${filtered.length} registros`;
   document.getElementById('gastos-total-pill').textContent = fmt(total) + ' total';
 
-  const listEl   = document.getElementById('gastos-list');
+  const listEl = document.getElementById('gastos-list');
 
   if (filtered.length === 0) {
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">💳</div>Sin gastos para este filtro</div>';
+    // La query es texto del usuario: siempre por el tag `html`.
+    listEl.innerHTML = searching
+      ? html`<div class="empty-state"><div class="empty-icon">🔍</div>Sin resultados para “${gastoQuery.trim()}”</div>`
+      : '<div class="empty-state"><div class="empty-icon">💳</div>Sin gastos para este filtro</div>';
     return;
   }
-  listEl.innerHTML = [...filtered].reverse().map(g => gastoItemHTML(g, catInfo, fmt)).join('');
+
+  // 4) orden — sortRecords ya devuelve "más recientes primero" como base
+  const sorted = sortRecords(filtered, gastoSort, g => catInfo(g.categoria).label);
+  listEl.innerHTML = sorted.map(g => gastoItemHTML(g, catInfo, fmt)).join('');
   listEl.querySelectorAll('.gasto-item').forEach(el => {
     el.addEventListener('click', () => openEditGasto(el.dataset.id, state, onSave, onDelete));
+  });
+}
+
+// ── Buscador y orden ───────────────────────────────────────
+
+/**
+ * Registra el buscador y el selector de orden (llamar una sola vez en init).
+ *
+ * Cada tecla re-renderiza SOLO la lista: `_renderList` no toca el selector de
+ * meses ni los chips, así que no salta el `scrollIntoView` que agenda
+ * `buildMonthSelector` ni se pierde el foco del input.
+ *
+ * Se toma el state por callback y no por argumento para no quedar con una
+ * referencia vieja (por ejemplo, después de importar datos).
+ *
+ * @param {Function} getState — () => state
+ * @param {Function} onSave    — (gastoActualizado) => void
+ * @param {Function} onDelete  — (id) => void
+ */
+export function initGastosControls(getState, onSave, onDelete) {
+  const searchEl = document.getElementById('gastos-search');
+  const sortEl   = document.getElementById('gastos-sort');
+
+  const refreshList = () => {
+    const s = getState();
+    _renderList(gastosByMonth(s, s.selectedMonth), s, onSave, onDelete);
+  };
+
+  searchEl?.addEventListener('input', () => {
+    gastoQuery = searchEl.value;
+    refreshList();
+  });
+  // Enter cierra el teclado en mobile.
+  searchEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') searchEl.blur();
+  });
+  sortEl?.addEventListener('change', () => {
+    gastoSort = sanitizeEnum(sortEl.value, SORT_MODES);
+    refreshList();
   });
 }
 
