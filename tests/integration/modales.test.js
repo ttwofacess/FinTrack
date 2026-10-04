@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   bootApp, stubBrowserApis, restoreBrowserApis,
-  $, $$, byId, navTo, toastText, activeScreen, submitGasto,
+  $, $$, byId, navTo, toastText, activeScreen, submitGasto, getStoredState, stateWith,
 } from '../helpers/app.js';
 import { showToast } from '../../ui.js';
+
+/** Escape en el document, como lo dispara el navegador. */
+const pressEscape = () =>
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
 beforeEach(stubBrowserApis);
 afterEach(restoreBrowserApis);
@@ -107,14 +111,73 @@ describe('flujo del modal de gasto', () => {
     expect(byId('gastos-count').textContent).toBe('0 registros');
   });
 
-  it('el escape no viene del teclado: el cierre es por overlay o guardar', async () => {
+  it('Escape cierra el modal abierto', async () => {
     await bootApp();
     abrirGasto();
 
-    byId('modal-gasto').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    pressEscape();
 
-    // Documenta que la app no tiene listener de Escape: el modal sigue abierto.
+    expect(byId('modal-gasto').classList.contains('open')).toBe(false);
+  });
+
+  it('Escape cierra todos los modales abiertos, como el click en el overlay', async () => {
+    await bootApp();
+    byId('btn-donate').click();
+    abrirGasto();
+
+    pressEscape();
+
+    expect(byId('modal-gasto').classList.contains('open')).toBe(false);
+    expect(byId('modal-donate').classList.contains('open')).toBe(false);
+  });
+
+  it('Escape sin ningún modal abierto no hace nada', async () => {
+    await bootApp();
+
+    expect(() => pressEscape()).not.toThrow();
+    expect($('.screen.active').id).toBe('screen-dashboard');
+    expect(byId('dash-balance').textContent).toBe('$0');
+  });
+
+  it('otra tecla no cierra el modal', async () => {
+    await bootApp();
+    abrirGasto();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
     expect(byId('modal-gasto').classList.contains('open')).toBe(true);
+  });
+
+  it('cerrar con Escape no deja el modal de edición colgado', async () => {
+    await bootApp(stateWith((s) => {
+      s.selectedMonth = 0;
+      s.gastos = [{ id: 'g1', detalle: 'Alquiler', importe: 800000, mes: 0, categoria: 'vivienda', medio: 'efectivo' }];
+    }));
+    navTo('gastos');
+    $('#gastos-list .gasto-item').click();
+    expect(byId('modal-title').textContent).toBe('Editar Gasto');
+    pressEscape();
+
+    // El siguiente modal es de alta: no debe editar el gasto anterior ni
+    // dejarlo disponible para borrar.
+    byId('fab').click();
+    expect(byId('modal-title').textContent).toBe('Nuevo Gasto');
+    expect(byId('btn-delete-gasto').style.display).toBe('none');
+    submitGasto({ detalle: 'Café', importe: '2500', mes: 0, categoria: 'salidas', medio: 'efectivo' });
+
+    expect(getStoredState().gastos.map(g => g.detalle)).toEqual(['Alquiler', 'Café']);
+  });
+
+  it('Escape no guarda nada: el modal se descarta', async () => {
+    await bootApp();
+    abrirGasto();
+    byId('f-detalle').value = 'Alquiler';
+    byId('f-importe').value = '900000';
+
+    pressEscape();
+
+    expect(toastText()).toBe('');
+    expect(getStoredState().gastos).toHaveLength(0);
   });
 });
 

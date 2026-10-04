@@ -214,9 +214,17 @@ document.getElementById('btn-reset-data').addEventListener('click', () => {
 });
 
 // ── Modales ──────────────────────────────────────────────
-closeModals; // asegurar que está importado
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => { if (e.target === overlay) closeModals(); });
+});
+
+// Escape es el gesto natural para descartar un modal, pero en mobile el overlay
+// comparte zona con el botón de guardar: sin esto, touch fuera es la única
+// salida y es fácil cerrarlo por error después de guardar. Se comportan como el
+// click en el overlay: se cierran todos los modales abiertos.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  closeModals();
 });
 
 // ── FAB ──────────────────────────────────────────────────
