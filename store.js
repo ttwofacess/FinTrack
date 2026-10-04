@@ -54,6 +54,22 @@ export function normalizeState(s) {
   return s;
 }
 
+/**
+ * Escribe el estado en localStorage.
+ * @returns {boolean} true si se guardó, false si el almacenamiento falló.
+ *
+ * Un fallo acá (cuota llena, modo privado, permisos) no puede interrumpir al
+ * caller: la app sigue funcionando con el estado en memoria, pero sin
+ * persistencia. Por eso el error se captura y se reporta en consola en lugar de
+ * propagarse — si se escapara, cortaba el callback de guardado y el usuario
+ * perdía el cambio sin ninguna señal.
+ */
 export function setState(s) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    return true;
+  } catch (error) {
+    console.warn('[FinTrack] No se pudo guardar el estado en localStorage:', error);
+    return false;
+  }
 }

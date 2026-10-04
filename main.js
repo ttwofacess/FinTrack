@@ -6,7 +6,7 @@
 // ============================================================
 
 import { getState, setState, defaultState } from './store.js';
-import { closeModals, showToast }           from './ui.js';
+import { closeModals, showToast, syncAllMonthSelectors } from './ui.js';
 import { renderDashboard }                  from './dashboard.js';
 import { renderGastos, initGastoModal, openNewGasto, openEditGasto } from './gastos.js';
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
@@ -85,6 +85,15 @@ window.addEventListener('appinstalled', () => {
 });
 
 // ── Navegación ────────────────────────────────────────────
+//
+// El dashboard muestra datos de todas las colecciones, así que cualquier
+// cambio en gastos, ingresos o budgets tiene que refrescarlo. navigate() lo
+// re-renderiza al entrar a la pantalla, pero mientras el usuario está en otra
+// pantalla el DOM queda desactualizado si sólo se repinta la pantalla activa.
+function renderDashboardActual() {
+  renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+}
+
 function navigate(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -92,7 +101,7 @@ function navigate(screenId) {
   document.querySelector(`.nav-item[data-screen="${screenId}"]`).classList.add('active');
   document.getElementById('fab').style.display = screenId === 'gastos' ? 'flex' : 'none';
 
-  if (screenId === 'dashboard')   renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+  if (screenId === 'dashboard')   renderDashboardActual();
   if (screenId === 'gastos')      renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
   if (screenId === 'presupuesto') renderPresupuesto(STATE, onMonthChange, onBudgetSave);
   if (screenId === 'ingresos')    renderIngresos(STATE, onMonthChange);
@@ -106,7 +115,10 @@ document.querySelectorAll('.nav-item').forEach(el => {
 function onMonthChange(mi) {
   STATE.selectedMonth = mi;
   saveS();
-  // Re-renderiza la pantalla activa
+  // El selector de la pantalla activa se re-renderiza con navigate(), pero las
+  // otras ya tienen botones construidos: hay que sincronizarlos o queda
+  // resaltado el mes viejo en las pantallas que el usuario tiene ocultas.
+  syncAllMonthSelectors(mi);
   const active = document.querySelector('.screen.active');
   if (active) navigate(active.id.replace('screen-', ''));
 }
@@ -134,14 +146,14 @@ function onGastoSave(gasto) {
   }
   saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
-  renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+  renderDashboardActual();
 }
 
 function onGastoDelete(id) {
   STATE.gastos = STATE.gastos.filter(g => g.id !== id);
   saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
-  renderDashboard(STATE, onMonthChange, (id) => openEditGasto(id, STATE, onGastoSave, onGastoDelete));
+  renderDashboardActual();
 }
 
 // ── Callbacks de ingresos ────────────────────────────────
@@ -155,6 +167,7 @@ function onIngresoSave(ingreso) {
   STATE.ingresos.push({ id, ...result.data });
   saveS();
   renderIngresos(STATE, onMonthChange);
+  renderDashboardActual();
 }
 
 // ── Callbacks de presupuesto ─────────────────────────────
@@ -169,6 +182,7 @@ function onBudgetSave(mi, updates) {
   Object.assign(STATE.budgets[mi], result.data);
   saveS();
   renderPresupuesto(STATE, onMonthChange, onBudgetSave);
+  renderDashboardActual();
 }
 
 // ── Import / export / reset ──────────────────────────────

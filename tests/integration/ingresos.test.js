@@ -127,14 +127,13 @@ describe('resumen de ingresos', () => {
 });
 
 describe('ingresos en el resto de la app', () => {
-  it('el ingreso mueve el balance del dashboard al volver a la pantalla', async () => {
+  it('el ingreso actualiza el dashboard sin cambiar de pantalla', async () => {
     await bootApp();
+    navTo('ingresos');
     expect(byId('dash-balance').textContent).toBe('$0');
 
-    navTo('ingresos');
     crearIngreso(nuevoIngreso());
 
-    navTo('dashboard');
     expect(byId('dash-ingresos').textContent).toBe('$1.200.000');
     expect(byId('dash-balance').textContent).toBe('$1.200.000');
     expect(byId('dash-balance').className).toContain('positive');

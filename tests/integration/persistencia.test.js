@@ -4,6 +4,7 @@ import {
   $, $$, byId, navTo, clickMonth, toastText, getStoredState, setStoredState,
   submitGasto, submitIngreso, stateWith,
 } from '../helpers/app.js';
+import { defaultState } from '../../store.js';
 
 beforeEach(stubBrowserApis);
 afterEach(restoreBrowserApis);
@@ -147,30 +148,39 @@ describe('reinicio de datos', () => {
 });
 
 describe('persistencia sin localStorage', () => {
-  // setState (store.js:58) no está protegido con try/catch, a diferencia de
-  // getState. Si localStorage falla (modo privado, cuota llena) la excepción
-  // corta el callback de guardado: no se avisa, no se renderiza y el gasto
-  // queda sólo en memoria. Comportamiento actual, documentado como bug.
-  it('un setItem que lanza corta el guardado sin avisar al usuario', async () => {
+  it('sigue operando en memoria cuando localStorage falla al guardar', async () => {
     await bootApp(estadoCompleto());
-    const onError = (e) => e.preventDefault();
-    window.addEventListener('error', onError);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('cuota', 'QuotaExceededError');
     });
 
     crearGasto({ detalle: 'Café', importe: '3000', mes: 0, categoria: 'salidas', medio: 'efectivo' });
 
-    expect(toastText()).not.toContain('Gasto guardado');
-    expect($$('#gastos-list .gasto-name').map(n => n.textContent)).not.toContain('Café');
-
-    // La app sigue viva: al recuperar el storage, guardar funciona de nuevo.
-    setItem.mockRestore();
-    window.removeEventListener('error', onError);
-    crearGasto({ detalle: 'Café', importe: '3000', mes: 0, categoria: 'salidas', medio: 'efectivo' });
+    // El guardado falla pero no corta el callback: la UI se actualiza igual.
     expect(toastText()).toContain('Gasto guardado');
-    // El primer intento igual dejó el gasto en memoria: se persiste al guardar bien.
+    expect($$('#gastos-list .gasto-name').map(n => n.textContent)).toContain('Café');
+    expect(warn).toHaveBeenCalled();
+
+    // Lo que no se pudo es persistir: el almacenamiento sigue con lo anterior.
+    setItem.mockRestore();
+    expect(getStoredState().gastos).toHaveLength(2);
+
+    // Al recuperar elstorage, el siguiente guardado persiste todo.
+    crearGasto({ detalle: 'Pan', importe: '1500', mes: 0, categoria: 'alimentacion', medio: 'efectivo' });
     expect(getStoredState().gastos).toHaveLength(4);
+  });
+
+  it('avisa por consola y devuelve false cuando no se puede guardar', async () => {
+    await bootApp();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('cuota', 'QuotaExceededError');
+    });
+    const { setState } = await import('../../store.js');
+
+    expect(setState(defaultState())).toBe(false);
+    expect(warn).toHaveBeenCalled();
   });
 
   it('un getItem corrupto no rompe el arranque', async () => {

@@ -70,18 +70,16 @@ describe('navegación', () => {
     expect($$('#dash-months .month-btn')[3].classList.contains('active')).toBe(true);
   });
 
-  //onMonthChange de main.js solo re-renderiza la pantalla activa, así que el
-  // dashboard conserva el mes anterior hasta que se vuelve a entrar. El selector
-  // de meses del dashboard tampoco se re-sincroniza (syncAllMonthSelectors de
-  // ui.js no lo llama nadie en la app). Documentado como comportamiento actual.
-  it('leaves the dashboard on the old month until it is revisited', async () => {
+  it('sincroniza el selector de meses de las pantallas ocultas', async () => {
     await bootApp();
     navTo('gastos');
 
     clickMonth('gastos-months', 3);
 
-    expect(byId('dash-month-name').textContent).not.toMatch(/^Abril/);
-    expect($$('#dash-months .month-btn')[3].classList.contains('active')).toBe(false);
+    // El contenido del dashboard se repinta al entrar a la pantalla, pero el
+    // selector ya construido tiene que marcar el mes nuevo en el acto.
+    expect($$('#dash-months .month-btn')[3].classList.contains('active')).toBe(true);
+    expect($$('#dash-months .month-btn')[9].classList.contains('active')).toBe(false);
   });
 
   it('resets the gastos filter when the month changes', async () => {

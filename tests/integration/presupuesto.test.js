@@ -176,13 +176,13 @@ describe('presupuesto en el dashboard', () => {
     expect($('#dash-bvr .bvr-vals').textContent).toBe('$400.000 / $800.000');
   });
 
-  it('un budget nuevo se ve en el dashboard al volver a la pantalla', async () => {
+  it('un budget nuevo se ve en el dashboard sin cambiar de pantalla', async () => {
     await bootApp();
     navTo('presupuesto');
-    editarBudget('vivienda', 800000);
-    expect(byId('dash-presup').textContent).toBe('$0');
 
-    navTo('dashboard');
+    editarBudget('vivienda', 800000);
+
     expect(byId('dash-presup').textContent).toBe('$800.000');
+    expect($$('#dash-bvr .bvr-vals')[0].textContent).toBe('$0 / $800.000');
   });
 });
