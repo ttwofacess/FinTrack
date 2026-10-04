@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   showToast, closeModals, buildMonthSelector, syncAllMonthSelectors, gastoItemHTML,
+  toastSinPersistencia,
 } from '../ui.js';
 import { catInfo, fmt } from '../utils.js';
 import { MESES } from '../constants.js';
@@ -151,6 +152,39 @@ describe('buildMonthSelector', () => {
 
   it('does nothing when the container is missing', () => {
     expect(() => buildMonthSelector('no-existe', 0, vi.fn())).not.toThrow();
+  });
+});
+
+describe('toastSinPersistencia', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="toast"></div>';
+  });
+
+  it('nombra qué se perdió y avisa que el almacenamiento falló', () => {
+    toastSinPersistencia('Gasto nuevo');
+    expect(document.getElementById('toast').textContent)
+      .toContain('Gasto nuevo sin guardar');
+    expect(document.getElementById('toast').textContent)
+      .toContain('almacenamiento del navegador');
+  });
+
+  it('dura más que un toast normal', () => {
+    vi.useFakeTimers();
+    try {
+      toastSinPersistencia('Ingreso');
+      vi.advanceTimersByTime(5000);
+      expect(document.getElementById('toast').classList.contains('show')).toBe(true);
+      vi.advanceTimersByTime(3001);
+      expect(document.getElementById('toast').classList.contains('show')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reemplaza el contenido anterior del toast', () => {
+    showToast('✓ Gasto guardado');
+    toastSinPersistencia('Gasto');
+    expect(document.getElementById('toast').textContent).not.toContain('✓');
   });
 });
 

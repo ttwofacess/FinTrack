@@ -8,7 +8,7 @@
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
 import { fmt, catInfo, gastosByMonth, uid, validateGasto, html, raw } from './utils.js';
-import { buildMonthSelector, closeModals, showToast, gastoItemHTML } from './ui.js';
+import { buildMonthSelector, closeModals, showToast, toastSinPersistencia, gastoItemHTML } from './ui.js';
 
 let gastoFilter   = 'all';
 let editingGastoId = null;
@@ -107,7 +107,11 @@ function _populateGastoForm(selectedMonth) {
      <optgroup label="Gastos Variables">${raw(CAT_VARIABLES.map(c => html`<option value="${c.key}">${c.icon} ${c.label}</option>`).join(''))}</optgroup>`;
 }
 
-/** Registra los listeners del modal (llamar una sola vez en init) */
+/**
+ * Registra los listeners del modal (llamar una sola vez en init).
+ * @param {Function} onSave   — (gasto) => boolean|undefined; false = no persistido
+ * @param {Function} onDelete — (id) => boolean|undefined; false = no persistido
+ */
 export function initGastoModal(getState, onSave, onDelete) {
   document.getElementById('btn-save-gasto').addEventListener('click', () => {
     const raw = {
@@ -125,19 +129,22 @@ export function initGastoModal(getState, onSave, onDelete) {
     }
 
     const gasto = result.data;
-    if (editingGastoId) {
-      onSave({ ...gasto, id: editingGastoId, _edit: true });
-    } else {
-      onSave({ ...gasto, id: uid(), _edit: false });
-    }
+    const wasEdit = Boolean(editingGastoId);
+    const persisted = wasEdit
+      ? onSave({ ...gasto, id: editingGastoId, _edit: true })
+      : onSave({ ...gasto, id: uid(), _edit: false });
     closeModals();
-    showToast(editingGastoId ? '✓ Gasto actualizado' : '✓ Gasto guardado');
+    // Un "✓ guardado" cuando localStorage falló sería una mentira: el cambio
+    // se queda sólo en memoria y se pierde al cerrar.
+    if (persisted === false) toastSinPersistencia(wasEdit ? 'Gasto' : 'Gasto nuevo');
+    else showToast(wasEdit ? '✓ Gasto actualizado' : '✓ Gasto guardado');
   });
 
   document.getElementById('btn-delete-gasto').addEventListener('click', () => {
     if (!editingGastoId) return;
-    onDelete(editingGastoId);
+    const persisted = onDelete(editingGastoId);
     closeModals();
-    showToast('Gasto eliminado');
+    if (persisted === false) toastSinPersistencia('Baja de gasto');
+    else showToast('Gasto eliminado');
   });
 }

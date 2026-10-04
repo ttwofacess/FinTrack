@@ -6,7 +6,7 @@
 // ============================================================
 
 import { getState, setState, defaultState } from './store.js';
-import { closeModals, showToast, syncAllMonthSelectors } from './ui.js';
+import { closeModals, showToast, syncAllMonthSelectors, toastSinPersistencia } from './ui.js';
 import { renderDashboard }                  from './dashboard.js';
 import { renderGastos, initGastoModal, openNewGasto, openEditGasto } from './gastos.js';
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
@@ -21,6 +21,10 @@ let deferredInstallPrompt = null;
 
 // ── Helpers de acceso ────────────────────────────────────
 const getS  = () => STATE;
+
+// saveS devuelve false si el estado no llegó a localStorage. Los callbacks de
+// guardado usan ese valor para no mostrar un "✓ guardado" cuando en realidad el
+// cambio se quedó sólo en memoria.
 const saveS = () => setState(STATE);
 
 function registerServiceWorker() {
@@ -114,7 +118,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
 // ── Callbacks de mes ─────────────────────────────────────
 function onMonthChange(mi) {
   STATE.selectedMonth = mi;
-  saveS();
+  if (!saveS()) toastSinPersistencia('Cambio de mes');
   // El selector de la pantalla activa se re-renderiza con navigate(), pero las
   // otras ya tienen botones construidos: hay que sincronizarlos o queda
   // resaltado el mes viejo en las pantallas que el usuario tiene ocultas.
@@ -144,16 +148,18 @@ function onGastoSave(gasto) {
     const { _edit: _, ...toSave } = clean;
     STATE.gastos.push(toSave);
   }
-  saveS();
+  const persisted = saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
   renderDashboardActual();
+  return persisted;
 }
 
 function onGastoDelete(id) {
   STATE.gastos = STATE.gastos.filter(g => g.id !== id);
-  saveS();
+  const persisted = saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
   renderDashboardActual();
+  return persisted;
 }
 
 // ── Callbacks de ingresos ────────────────────────────────
@@ -165,9 +171,10 @@ function onIngresoSave(ingreso) {
     return;
   }
   STATE.ingresos.push({ id, ...result.data });
-  saveS();
+  const persisted = saveS();
   renderIngresos(STATE, onMonthChange);
   renderDashboardActual();
+  return persisted;
 }
 
 // ── Callbacks de presupuesto ─────────────────────────────
@@ -180,24 +187,29 @@ function onBudgetSave(mi, updates) {
 
   if (!STATE.budgets[mi]) STATE.budgets[mi] = {};
   Object.assign(STATE.budgets[mi], result.data);
-  saveS();
+  const persisted = saveS();
   renderPresupuesto(STATE, onMonthChange, onBudgetSave);
   renderDashboardActual();
+  return persisted;
 }
 
 // ── Import / export / reset ──────────────────────────────
 initDataIO(getS, (importedState) => {
   STATE = importedState;
-  saveS();
+  const persisted = saveS();
   navigate('dashboard');
+  return persisted;
 });
 
 document.getElementById('btn-reset-data').addEventListener('click', () => {
   if (confirm('¿Estás seguro de que querés eliminar TODOS los datos? Esta acción es permanente.')) {
     STATE = defaultState();
-    saveS();
+    const persisted = saveS();
     navigate('dashboard');
-    showToast('🗑️ Datos eliminados');
+    if (persisted) showToast('🗑️ Datos eliminados');
+    // Si no se pudo escribir, los datos siguen intactos en el almacenamiento:
+    // decir "eliminados" sería falso.
+    else toastSinPersistencia('Borrado');
   }
 });
 

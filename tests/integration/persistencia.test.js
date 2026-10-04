@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   bootApp, restartApp, stubBrowserApis, restoreBrowserApis,
   $, $$, byId, navTo, clickMonth, toastText, getStoredState, setStoredState,
-  submitGasto, submitIngreso, stateWith,
+  submitGasto, submitIngreso, stateWith, clearToast, openGastoFromList,
 } from '../helpers/app.js';
 import { defaultState } from '../../store.js';
 
@@ -147,6 +147,133 @@ describe('reinicio de datos', () => {
   });
 });
 
+describe('aviso cuando no se puede guardar', () => {
+  /** Rompe la escritura y devuelve el spy para poder assertionar sobre el toast. */
+  const romperStorage = () =>
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('cuota', 'QuotaExceededError');
+    });
+
+  beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => {}));
+
+  it('avisa al crear un gasto', async () => {
+    await bootApp();
+    romperStorage();
+
+    crearGasto({ detalle: 'Café', importe: '3000', mes: 0, categoria: 'salidas', medio: 'efectivo' });
+
+    expect(toastText()).toContain('Gasto nuevo sin guardar');
+  });
+
+  it('avisa al editar un gasto', async () => {
+    await bootApp(stateWith((s) => { s.selectedMonth = 0; }));
+    navTo('gastos');
+    byId('fab').click();
+    submitGasto({ detalle: 'Base', importe: '1000', mes: 0, categoria: 'salidas', medio: 'efectivo' });
+    romperStorage();
+    clearToast();
+
+    openGastoFromList();
+    byId('f-importe').value = '2000';
+    byId('btn-save-gasto').click();
+
+    expect(toastText()).toContain('Gasto sin guardar');
+    expect(toastText()).not.toContain('Gasto actualizado');
+  });
+
+  it('avisa al borrar un gasto', async () => {
+    await bootApp(estadoCompleto());
+    navTo('gastos');
+    romperStorage();
+    clearToast();
+
+    openGastoFromList();
+    byId('btn-delete-gasto').click();
+
+    expect(toastText()).toContain('Baja de gasto sin guardar');
+    expect(toastText()).not.toContain('Gasto eliminado');
+  });
+
+  it('avisa al agregar un ingreso', async () => {
+    await bootApp();
+    navTo('ingresos');
+    romperStorage();
+
+    byId('btn-add-ingreso').click();
+    submitIngreso({ descripcion: 'Sueldo', importe: '500000', mes: 0, tipo: 'sueldo' });
+
+    expect(toastText()).toContain('Ingreso sin guardar');
+  });
+
+  it('avisa al guardar un presupuesto', async () => {
+    await bootApp();
+    navTo('presupuesto');
+    romperStorage();
+
+    byId('btn-edit-presup').click();
+    $('#presup-content input[data-cat="vivienda"]').value = '800000';
+    byId('btn-save-presup').click();
+
+    expect(toastText()).toContain('Presupuesto sin guardar');
+    expect(toastText()).not.toContain('Budget guardado');
+  });
+
+  it('avisa al cambiar de mes', async () => {
+    await bootApp();
+    romperStorage();
+
+    clickMonth('dash-months', 2);
+
+    expect(toastText()).toContain('Cambio de mes sin guardar');
+    // Igual se aplica en memoria y la pantalla lo refleja.
+    expect(getStoredState().selectedMonth).toBe(0);
+    expect(byId('dash-month-name').textContent).toMatch(/^Marzo/);
+  });
+
+  it('avisa al borrar todos los datos, porque no se borraron', async () => {
+    await bootApp(estadoCompleto());
+    romperStorage();
+
+    byId('btn-reset-data').click();
+
+    expect(toastText()).toContain('Borrado sin guardar');
+    expect(toastText()).not.toContain('Datos eliminados');
+    expect(getStoredState().gastos).toHaveLength(2);
+  });
+
+  it('avisa al importar, porque el archivo no quedó guardado', async () => {
+    await bootApp();
+    romperStorage();
+    const file = new File([JSON.stringify(estadoCompleto())], 'f.json', { type: 'application/json' });
+    const input = byId('input-import');
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+    input.dispatchEvent(new Event('change'));
+
+    await vi.waitFor(() => expect(toastText()).toContain('Importación sin guardar'));
+    expect(toastText()).not.toContain('Datos importados');
+  });
+
+  it('el aviso dura más que un toast normal para que se pueda leer', async () => {
+    await bootApp();
+    romperStorage();
+    // Los timers falsos se activan después del boot: el harness drena con un
+    // setTimeout y se colgaría.
+    vi.useFakeTimers();
+    try {
+      crearGasto({ detalle: 'Café', importe: '3000', mes: 0, categoria: 'salidas', medio: 'efectivo' });
+      expect(toastText()).toContain('sin guardar');
+
+      vi.advanceTimersByTime(5000);   // el toast normal ya se habría ocultado
+      expect(byId('toast').classList.contains('show')).toBe(true);
+
+      vi.advanceTimersByTime(3001);
+      expect(byId('toast').classList.contains('show')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('persistencia sin localStorage', () => {
   it('sigue operando en memoria cuando localStorage falla al guardar', async () => {
     await bootApp(estadoCompleto());
@@ -157,8 +284,10 @@ describe('persistencia sin localStorage', () => {
 
     crearGasto({ detalle: 'Café', importe: '3000', mes: 0, categoria: 'salidas', medio: 'efectivo' });
 
-    // El guardado falla pero no corta el callback: la UI se actualiza igual.
-    expect(toastText()).toContain('Gasto guardado');
+    // El guardado falla pero no corta el callback: la UI se actualiza igual y
+    // el toast de éxito se reemplaza por el aviso de que no se persistió.
+    expect(toastText()).toContain('Gasto nuevo sin guardar');
+    expect(toastText()).not.toContain('Gasto guardado');
     expect($$('#gastos-list .gasto-name').map(n => n.textContent)).toContain('Café');
     expect(warn).toHaveBeenCalled();
 

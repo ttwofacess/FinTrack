@@ -6,7 +6,7 @@
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
 import { fmt, ingresosByMonth, totalIngresosMonth, gastoByCat, validateBudgetUpdate, html } from './utils.js';
-import { buildMonthSelector, showToast } from './ui.js';
+import { buildMonthSelector, showToast, toastSinPersistencia } from './ui.js';
 
 let presupTab = 'fijos';
 
@@ -74,7 +74,8 @@ function _renderBudgetTab(cats, budgets, mi, state, el) {
 /**
  * Activa el modo edición inline del presupuesto.
  * @param {object}   state
- * @param {Function} onBudgetSave — (mi, { catKey: value }) => void
+ * @param {Function} onBudgetSave — (mi, { catKey: value }) => boolean|undefined;
+ *   false = el budget no llegó a persistirse
  */
 export function openEditPresup(state, onBudgetSave) {
   const mi      = state.selectedMonth;
@@ -120,8 +121,9 @@ export function openEditPresup(state, onBudgetSave) {
       return;
     }
 
-    onBudgetSave(mi, result.data);
-    showToast('✓ Budget guardado');
+    const persisted = onBudgetSave(mi, result.data);
+    if (persisted === false) toastSinPersistencia('Presupuesto');
+    else showToast('✓ Budget guardado');
   });
 }
 
@@ -136,8 +138,9 @@ export function initPresupuestoEvents(getState, onMonthChange, onBudgetSave) {
 
   document.getElementById('btn-edit-presup').addEventListener('click', () => {
     openEditPresup(getState(), (mi, updates) => {
-      onBudgetSave(mi, updates);
+      const persisted = onBudgetSave(mi, updates);
       renderPresupuesto(getState(), onMonthChange, onBudgetSave);
+      return persisted;
     });
   });
 }
