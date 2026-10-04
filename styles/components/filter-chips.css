@@ -9,3 +9,21 @@
   -webkit-tap-highlight-color: transparent;
 }
 .filter-chip.active { border-color: var(--accent2); color: var(--accent2); background: rgba(250,109,154,0.08); }
+
+/* Buscador + orden. HTML estático: #gastos-filters se pisa con innerHTML en
+   cada render, así que estos controles no pueden vivir adentro. */
+.search-row { display: flex; gap: 8px; padding: 8px 16px 0; }
+.search-row .search-input {
+  flex: 1; min-width: 0; width: auto;
+  padding: 9px 12px;
+  font-size: 16px;          /* iOS Safari hace zoom al enfocar inputs de <16px */
+  border-radius: 20px;
+  -webkit-appearance: none;  /* quita el clearest de type="search" en WebKit */
+}
+.search-row .search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search-row .sort-select {
+  flex-shrink: 0; width: auto;
+  padding: 9px 12px;
+  font-size: 16px;
+  border-radius: 20px;
+}

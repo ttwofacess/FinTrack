@@ -1,12 +1,23 @@
 // ============================================================
 // ingresos.js — Pantalla Ingresos + Modal de ingreso
-// Responsabilidad: renderizar la vista de ingresos y gestionar
-// el modal para agregar nuevos registros.
+// Responsabilidad: renderizar la vista de ingresos, ordenar
+// el detalle del mes y gestionar el modal para agregar nuevos
+// registros.
 // ============================================================
 
 import { MESES, CUR_YEAR } from './constants.js';
-import { fmt, uid, ingresosByMonth, totalIngresosMonth, validateIngreso, html } from './utils.js';
+import { fmt, uid, ingresosByMonth, totalIngresosMonth, validateIngreso, html,
+         sortRecords, sanitizeEnum } from './utils.js';
 import { buildMonthSelector, closeModals, showToast, toastSinPersistencia } from './ui.js';
+
+// Ingresos lista en orden de carga, sin invertir, así que 'carga' es el default:
+// poner 'recientes' cambiaría el orden de la lista al publicar una actualización.
+let ingSort = 'carga';
+
+// El primer elemento es el default de la pantalla porque sanitizeEnum cae al
+// primero ante un valor desconocido: si fuera 'recientes', un select sin la
+// opción elegida invertiría la lista en vez de volver al orden de carga.
+const ING_SORT_MODES = ['carga', 'monto-desc', 'monto-asc'];
 
 /**
  * @param {object}   state
@@ -46,11 +57,28 @@ export function renderIngresos(state, onMonthChange) {
     </div>
   `;
 
+  _syncSortControl();
+  _renderIngList(ings);
+}
+
+/**
+ * El estado del módulo sobrevive al salir y volver a la pantalla, así que el
+ * select hay que sincronizarlo con él en cada render.
+ */
+function _syncSortControl() {
+  const sortEl = document.getElementById('ing-sort');
+  if (sortEl && sortEl.value !== ingSort) sortEl.value = ingSort;
+}
+
+function _renderIngList(ings) {
   const listEl = document.getElementById('ing-list');
   if (ings.length === 0) {
     listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div>Sin ingresos este mes<br>Tocá + nuevo para agregar</div>';
-  } else {
-    listEl.innerHTML = ings.map(g => html`
+    return;
+  }
+  // Los ingresos no tienen categoría, así que no se ofrece orden alfabético.
+  const sorted = sortRecords(ings, ingSort);
+  listEl.innerHTML = sorted.map(g => html`
       <div class="ingreso-list-item">
         <div class="ili-left">
           <div class="ili-name">${g.descripcion}</div>
@@ -58,7 +86,26 @@ export function renderIngresos(state, onMonthChange) {
         </div>
         <div><div class="ili-amount">${fmt(g.importe)}</div></div>
       </div>`).join('');
-  }
+}
+
+/**
+ * Registra el selector de orden (llamar una sola vez en init). Cada cambio
+ * re-renderiza SOLO la lista, sin volver a dibujar las tarjetas de resumen.
+ *
+ * Se toma el state por callback para no quedar con una referencia vieja, por
+ * ejemplo después de importar datos.
+ *
+ * @param {Function} getState — () => state
+ */
+export function initIngresosControls(getState) {
+  const sortEl = document.getElementById('ing-sort');
+  sortEl?.addEventListener('change', () => {
+    ingSort = sanitizeEnum(sortEl.value, ING_SORT_MODES);
+    // Si el value no era una opción real el select queda en blanco: se escribe
+    // el modo ya saneado para que el control siempre muestre algo.
+    sortEl.value = ingSort;
+    _renderIngList(ingresosByMonth(getState(), getState().selectedMonth));
+  });
 }
 
 /** Abre el modal de nuevo ingreso */

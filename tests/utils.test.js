@@ -6,6 +6,7 @@ import {
   totalCashGastosMonth, totalCreditGastosMonth, totalCardPaymentsMonth,
   getCardDebtAtEnd, getCardDebtAtStart, getCardBalanceAtEnd, totalBudgetMonth, gastoByCat,
   sanitizeText, sanitizeImporte, sanitizeMes, sanitizeEnum,
+  normalizeText, matchesQuery, sortRecords, SORT_MODES,
   validateBudgetUpdate, validateGasto, validateIngreso,
   MAX_BUDGET_AMOUNT,
 } from '../utils.js';
@@ -332,6 +333,146 @@ describe('gastoByCat', () => {
       gasto({ id: '3', categoria: 'salidas', importe: 50 }),
     ]);
     expect(gastoByCat(mixed, 0, 'salidas')).toBe(150);
+  });
+});
+
+describe('normalizeText', () => {
+  it('lowercases and strips accents', () => {
+    expect(normalizeText('Café')).toBe('cafe');
+    expect(normalizeText('ALIMENTACIÓN')).toBe('alimentacion');
+  });
+
+  it('trims the outer whitespace', () => {
+    expect(normalizeText('  Supermercado  ')).toBe('supermercado');
+  });
+
+  it('collapses the eñe, which NFD splits into n + tilde', () => {
+    expect(normalizeText('Añejo')).toBe('anejo');
+  });
+
+  it('returns an empty string for null and undefined', () => {
+    expect(normalizeText(null)).toBe('');
+    expect(normalizeText(undefined)).toBe('');
+  });
+
+  it('coerces non-strings', () => {
+    expect(normalizeText(42)).toBe('42');
+    expect(normalizeText(true)).toBe('true');
+  });
+});
+
+describe('matchesQuery', () => {
+  it('matches everything when the query is empty or only whitespace', () => {
+    expect(matchesQuery('', 'Café')).toBe(true);
+    expect(matchesQuery('   ', 'Café')).toBe(true);
+    expect(matchesQuery(null, 'Café')).toBe(true);
+  });
+
+  it('ignores case and accents in both directions', () => {
+    expect(matchesQuery('cafe', 'Café con leche')).toBe(true);
+    expect(matchesQuery('CAFÉ', 'café con leche')).toBe(true);
+    expect(matchesQuery('supér', 'Super Coto')).toBe(true);
+  });
+
+  it('requires every word to appear, in any order', () => {
+    expect(matchesQuery('coto super', 'Super Coto')).toBe(true);
+    expect(matchesQuery('super coto', 'Super Coto')).toBe(true);
+    expect(matchesQuery('coto pan', 'Super Coto')).toBe(false);
+  });
+
+  it('matches across fields', () => {
+    expect(matchesQuery('salidas', 'Cena', 'Salidas')).toBe(true);
+    expect(matchesQuery('cena salidas', 'Cena', 'Salidas')).toBe(true);
+    expect(matchesQuery('cena Mascotas', 'Cena', 'Salidas')).toBe(false);
+  });
+
+  it('matches a substring of a word', () => {
+    expect(matchesQuery('per', 'Super Coto')).toBe(true);
+  });
+
+  it('treats missing fields as empty text', () => {
+    expect(matchesQuery('cena', 'Cena')).toBe(true);
+    expect(matchesQuery('cena', null, undefined)).toBe(false);
+  });
+});
+
+describe('sortRecords', () => {
+  // El array de entrada está en orden de carga, así que la base de todos los
+  // modos es el inverso: lo último cargado primero.
+  const recs = [
+    { id: 'a', importe: 3000, categoria: 'alimentacion' },
+    { id: 'b', importe: 12000, categoria: 'alimentacion' },
+    { id: 'c', importe: 5000, categoria: 'salidas' },
+  ];
+  const ids = (list) => list.map(r => r.id);
+
+  it('recientes returns a reversed copy without sorting', () => {
+    expect(ids(sortRecords(recs, 'recientes'))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('monto-desc sorts by importe, biggest first', () => {
+    expect(ids(sortRecords(recs, 'monto-desc'))).toEqual(['b', 'c', 'a']);
+  });
+
+  it('monto-asc sorts by importe, smallest first', () => {
+    expect(ids(sortRecords(recs, 'monto-asc'))).toEqual(['a', 'c', 'b']);
+  });
+
+  it('keeps the most recent first when the importe ties', () => {
+    const tied = [{ id: 'x', importe: 100 }, { id: 'y', importe: 100 }, { id: 'z', importe: 100 }];
+    expect(ids(sortRecords(tied, 'monto-desc'))).toEqual(['z', 'y', 'x']);
+    expect(ids(sortRecords(tied, 'monto-asc'))).toEqual(['z', 'y', 'x']);
+  });
+
+  it('categoria sorts by the given label, alphabetically', () => {
+    const label = (r) => catInfo(r.categoria).label;
+    expect(ids(sortRecords(recs, 'categoria', label))).toEqual(['b', 'a', 'c']);
+  });
+
+  it('categoria without a label function falls back to recientes', () => {
+    expect(ids(sortRecords(recs, 'categoria'))).toEqual(['c', 'b', 'a']);
+    expect(ids(sortRecords(recs, 'categoria', 'no soy función'))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('carga keeps the load order as-is', () => {
+    expect(ids(sortRecords(recs, 'carga'))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('an unknown mode falls back to recientes instead of throwing', () => {
+    expect(ids(sortRecords(recs, 'por-dios'))).toEqual(['c', 'b', 'a']);
+    expect(ids(sortRecords(recs, undefined))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('never mutates the input array', () => {
+    const input = [...recs];
+    sortRecords(input, 'monto-desc');
+    sortRecords(input, 'categoria', (r) => r.categoria);
+    expect(input).toEqual(recs);
+    expect(input.map(r => r.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('does not choke on a missing or non-numeric importe', () => {
+    const broken = [{ id: 'a' }, { id: 'b', importe: 50 }, { id: 'c', importe: undefined }];
+    expect(ids(sortRecords(broken, 'monto-desc'))).toEqual(['b', 'c', 'a']);
+    // a y c valen 0: empatan y el desempate conserva "más reciente primero".
+    expect(ids(sortRecords(broken, 'monto-asc'))).toEqual(['c', 'a', 'b']);
+  });
+
+  it('handles an empty list', () => {
+    expect(sortRecords([], 'monto-desc')).toEqual([]);
+  });
+});
+
+describe('SORT_MODES', () => {
+  it('lists the modes the UI offers, including the no-sort one', () => {
+    expect(SORT_MODES).toEqual(['recientes', 'monto-desc', 'monto-asc', 'categoria', 'carga']);
+  });
+
+  it('every mode is handled by sortRecords without falling back to default', () => {
+    const recs = [{ id: 'a', importe: 1, categoria: 'salidas' }];
+    for (const mode of SORT_MODES) {
+      expect(() => sortRecords(recs, mode, (r) => r.categoria)).not.toThrow();
+    }
   });
 });
 

@@ -266,3 +266,255 @@ describe('initGastoModal', () => {
     expect(onDelete).not.toHaveBeenCalled();
   });
 });
+
+// El estado de búsqueda y orden vive en el módulo, así que sobrevive entre
+// tests: sin resetear el registry, una query de un test filtra la lista del
+// siguiente. Por eso este bloque importa gastos.js de nuevo en cada test.
+describe('renderGastos — búsqueda y orden', () => {
+  let render, initControls, initModal;
+
+  const DATOS = [
+    gasto({ id: 'a', detalle: 'Café con leche', importe: 3000 }),
+    gasto({ id: 'b', detalle: 'Super Coto', importe: 12000 }),
+    gasto({ id: 'c', detalle: 'Cine', importe: 5000, categoria: 'salidas', medio: 'credito' }),
+    gasto({ id: 'd', detalle: 'Farmacia', importe: 8000, categoria: 'salud', mes: 1 }),
+  ];
+
+  let mes = 0;
+  const state = () => stateWith(DATOS, mes);
+
+  // main.js re-renderiza la pantalla desde onMonthChange (vía navigate), así que
+  // el callback de mes del test tiene que hacer lo mismo para que el estado del
+  // módulo y el DOM se sincronicen como en la app real.
+  const renderApp = () => render(state(), (mi) => { mes = mi; renderApp(); }, onSave, onDelete);
+
+  let onSave, onDelete;
+  const ids = () => [...document.querySelectorAll('#gastos-list .gasto-item')].map(e => e.dataset.id);
+  const search = () => document.getElementById('gastos-search');
+  const sort = () => document.getElementById('gastos-sort');
+  const type = (q) => { search().value = q; search().dispatchEvent(new Event('input')); };
+  const pick = (mode) => { sort().value = mode; sort().dispatchEvent(new Event('change')); };
+  const chip = (cat) => document.querySelector(`#gastos-filters .filter-chip[data-cat="${cat}"]`);
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ renderGastos: render, initGastosControls: initControls, initGastoModal: initModal } =
+      await import('../gastos.js'));
+    mes = 0;
+    onSave = vi.fn();
+    onDelete = vi.fn();
+    renderApp();
+    initModal(() => state(), onSave, onDelete);
+    initControls(() => state(), onSave, onDelete);
+  });
+
+  describe('búsqueda', () => {
+    it('filters by detalle ignoring case and accents', () => {
+      type('cafe');
+      expect(ids()).toEqual(['a']);
+    });
+
+    it('matches all words in any order', () => {
+      type('coto super');
+      expect(ids()).toEqual(['b']);
+    });
+
+    it('also matches the category label', () => {
+      type('salidas');
+      expect(ids()).toEqual(['c']);
+    });
+
+    it('combines with the category chip', () => {
+      chip('salidas').click();
+      type('Cine');
+      expect(ids()).toEqual(['c']);
+
+      type('Café');
+      expect(ids()).toEqual([]);
+    });
+
+    it('searches only inside the selected month', () => {
+      type('farmacia');
+      expect(ids()).toEqual([]);
+    });
+
+    it('shows "x de y registros" and totals only the matches', () => {
+      type('cafe');
+      expect(document.getElementById('gastos-count').textContent).toBe('1 de 3 registros');
+      expect(document.getElementById('gastos-total-pill').textContent).toBe('$3.000 total');
+    });
+
+    it('goes back to a plain count when the query is cleared', () => {
+      type('cafe');
+      type('');
+      expect(document.getElementById('gastos-count').textContent).toBe('3 registros');
+    });
+
+    it('treats a whitespace-only query as no query', () => {
+      type('   ');
+      expect(ids()).toEqual(['c', 'b', 'a']);
+      expect(document.getElementById('gastos-count').textContent).toBe('3 registros');
+    });
+
+    it('shows an empty state naming the query, without creating elements', () => {
+      type('<img src=x onerror=alert(1)>');
+      const empty = document.querySelector('#gastos-list .empty-state');
+      expect(document.querySelector('#gastos-list img')).toBeNull();
+      expect(empty.textContent).toContain('<img src=x');
+      expect(document.getElementById('gastos-count').textContent).toBe('0 de 3 registros');
+    });
+
+    it('does not rebuild the month selector while typing', () => {
+      const btn = document.querySelector('#gastos-months .month-btn');
+      type('cafe');
+      expect(document.querySelector('#gastos-months .month-btn')).toBe(btn);
+    });
+
+    it('keeps the focus in the input while typing', () => {
+      search().focus();
+      type('cafe');
+      expect(document.activeElement).toBe(search());
+    });
+
+    it('blurs on Enter so mobile hides the keyboard', () => {
+      search().focus();
+      search().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      expect(document.activeElement).not.toBe(search());
+    });
+
+    it('clears the search on month change but keeps the order', () => {
+      pick('monto-desc');
+      type('cafe');
+      document.querySelectorAll('#gastos-months .month-btn')[1].click();
+
+      expect(mes).toBe(1);
+      expect(search().value).toBe('');
+      expect(sort().value).toBe('monto-desc');
+    });
+
+    it('restores both controls when the screen is rendered again', () => {
+      type('cafe');
+      pick('monto-asc');
+      renderApp();
+
+      expect(search().value).toBe('cafe');
+      expect(sort().value).toBe('monto-asc');
+      expect(ids()).toEqual(['a']);
+    });
+
+    it('resynchroniza los controles si el DOM los restauró por su cuenta', () => {
+      // Un soft reload o el back-forward cache pueden devolver el input y el
+      // select con un valor viejo sin disparar 'input' ni 'change'. El módulo
+      // es la fuente de verdad: el DOM tiene que volver a él.
+      search().value = 'cafe';
+      sort().value = 'monto-asc';
+      renderApp();
+
+      expect(search().value).toBe('');
+      expect(sort().value).toBe('recientes');
+    });
+  });
+
+  describe('orden', () => {
+    it('recientes is the default and keeps the newest first', () => {
+      expect(sort().value).toBe('recientes');
+      expect(ids()).toEqual(['c', 'b', 'a']);
+    });
+
+    it('monto-desc puts the most expensive first', () => {
+      pick('monto-desc');
+      expect(ids()).toEqual(['b', 'c', 'a']);
+    });
+
+    it('monto-asc puts the cheapest first', () => {
+      pick('monto-asc');
+      expect(ids()).toEqual(['a', 'c', 'b']);
+    });
+
+    it('categoria sorts by the visible label, not by the key', () => {
+      pick('categoria');
+      // Alimentación (a, b) antes que Salidas (c); a y b empatan.
+      expect(ids()).toEqual(['b', 'a', 'c']);
+    });
+
+    it('orders the filtered result, not the whole month', () => {
+      type('C');
+      pick('monto-desc');
+      expect(ids()).toEqual(['b', 'c', 'a']);
+    });
+
+    it('falls back to recientes when the select has no matching option', () => {
+      // El select no tiene opción 'categoria' fuera de sí mismo ni 'carga': el
+      // navegador deja el value vacío y sanitizeEnum lo vuelve a 'recientes'.
+      pick('carga');
+      expect(sort().value).toBe('recientes');
+      expect(ids()).toEqual(['c', 'b', 'a']);
+
+      pick('inventado');
+      expect(sort().value).toBe('recientes');
+      expect(ids()).toEqual(['c', 'b', 'a']);
+    });
+
+    it('does not rebuild the month selector when the order changes', () => {
+      const btn = document.querySelector('#gastos-months .month-btn');
+      pick('monto-asc');
+      expect(document.querySelector('#gastos-months .month-btn')).toBe(btn);
+    });
+  });
+
+  describe('editar y eliminar sobre la lista filtrada', () => {
+    it('opens the edit modal for a gasto found by the search', () => {
+      type('coto');
+
+      document.querySelector('#gastos-list .gasto-item').click();
+
+      expect(document.getElementById('modal-title').textContent).toBe('Editar Gasto');
+      expect(document.getElementById('f-detalle').value).toBe('Super Coto');
+    });
+
+    it('saves the edit back through the same callback', () => {
+      type('coto');
+      document.querySelector('#gastos-list .gasto-item').click();
+      document.getElementById('f-importe').value = '9999';
+      document.getElementById('btn-save-gasto').click();
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'b', importe: 9999, _edit: true,
+      }));
+    });
+
+    it('deletes the gasto behind a search result', () => {
+      type('coto');
+
+      document.querySelector('#gastos-list .gasto-item').click();
+      document.getElementById('btn-delete-gasto').click();
+
+      expect(onDelete).toHaveBeenCalledWith('b');
+    });
+
+    it('deletes the right gasto when the list is ordered by importe', () => {
+      pick('monto-desc');
+      type('C');
+
+      document.querySelector('#gastos-list .gasto-item').click();
+      document.getElementById('btn-delete-gasto').click();
+
+      expect(onDelete).toHaveBeenCalledWith('b');
+    });
+  });
+});
+
+describe('renderGastos sin los controles de búsqueda', () => {
+  it('lista igual si el HTML no trae el buscador ni el selector de orden', () => {
+    document.body.innerHTML = `
+      <div id="gastos-months"></div>
+      <div id="gastos-filters"></div>
+      <span id="gastos-count"></span>
+      <span id="gastos-total-pill"></span>
+      <div id="gastos-list"></div>`;
+
+    expect(() => renderGastos(stateWith([gasto({ id: 'x' })]), noop, noop, noop)).not.toThrow();
+    expect(document.querySelectorAll('#gastos-list .gasto-item')).toHaveLength(1);
+    expect(document.getElementById('gastos-count').textContent).toBe('1 registros');
+  });
+});

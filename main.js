@@ -8,9 +8,9 @@
 import { getState, setState, defaultState } from './store.js';
 import { closeModals, showToast, syncAllMonthSelectors, toastSinPersistencia } from './ui.js';
 import { renderDashboard }                  from './dashboard.js';
-import { renderGastos, initGastoModal, openNewGasto, openEditGasto } from './gastos.js';
+import { renderGastos, initGastoModal, initGastosControls, openNewGasto, openEditGasto } from './gastos.js';
 import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
-import { renderIngresos, initIngresoModal }          from './ingresos.js';
+import { renderIngresos, initIngresoModal, initIngresosControls } from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
 import { initDonateModal }                           from './donate.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
@@ -236,7 +236,9 @@ document.getElementById('fab').addEventListener('click', () => openNewGasto(STAT
 
 // ── Init de listeners de una sola vez ────────────────────
 initGastoModal(getS, onGastoSave, onGastoDelete);
+initGastosControls(getS, onGastoSave, onGastoDelete);
 initIngresoModal(getS, onIngresoSave);
+initIngresosControls(getS);
 initPresupuestoEvents(getS, onMonthChange, onBudgetSave);
 initDonateModal();
 initInstallButton();

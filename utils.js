@@ -170,6 +170,76 @@ export function gastoByCat(state, mi, catKey) {
     .reduce((s, g) => s + (g.importe || 0), 0);
 }
 
+// ── Búsqueda y orden ───────────────────────────────────────
+//
+// Helpers puros para filtrar y ordenar listas de registros (gastos, ingresos)
+// que comparten los campos `importe` y `categoria`. El estado del store está en
+// orden de carga, así que "lo último agregado" es el array invertido: eso es lo
+// que hace `sortRecords` como base.
+
+const DIACRITICS = /[\u0300-\u036f]/g;
+
+/**
+ * Minúsculas + sin tildes/diacríticos y sin espacios extremos. "Café" → "cafe".
+ * Ojo: la NFD también descompone la eñe, así que "Añejo" queda "anejo". Sirve
+ * para comparar, no para mostrar: el texto original nunca se reescribe.
+ */
+export function normalizeText(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .normalize('NFD')
+    .replace(DIACRITICS, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * ¿Aparecen TODAS las palabras de `query` en alguno de los `fields`?
+ * Cada palabra puede estar en un field distinto: "coto super" matchea
+ * "Super Coto" sin importar el orden. Query vacía = todo matchea.
+ * Ignora mayúsculas y tildes.
+ */
+export function matchesQuery(query, ...fields) {
+  const tokens = normalizeText(query).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const haystack = fields.map(normalizeText).join(' ');
+  return tokens.every(t => haystack.includes(t));
+}
+
+// 'carga' es el orden de carga tal cual (sin invertir), para las pantallas que
+// hoy muestran el más viejo primero y no deben cambiar de comportamiento.
+export const SORT_MODES = ['recientes', 'monto-desc', 'monto-asc', 'categoria', 'carga'];
+
+/**
+ * Devuelve una copia ordenada; no muta la entrada.
+ *
+ * La base es "más recientes primero" (el array de entrada está en orden de
+ * carga, así que se invierte). Como Array.prototype.sort es estable, en
+ * 'monto-*' los empates conservan ese criterio, y 'carga' lo descarta a
+ * propósito devolviendo el orden original.
+ *
+ * @param {Array}     records
+ * @param {string}    mode         — uno de SORT_MODES; un valor desconocido
+ *                                   cae en 'recientes' en vez de romper
+ * @param {Function} [categoryLabel] — (record) => string; necesario para 'categoria'
+ */
+export function sortRecords(records, mode, categoryLabel) {
+  const list = [...records].reverse();
+  switch (mode) {
+    case 'monto-desc':
+      return list.sort((a, b) => (b.importe || 0) - (a.importe || 0));
+    case 'monto-asc':
+      return list.sort((a, b) => (a.importe || 0) - (b.importe || 0));
+    case 'categoria':
+      if (typeof categoryLabel !== 'function') return list;
+      return list.sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b), 'es'));
+    case 'carga':
+      return [...records];
+    default: // 'recientes' o valor desconocido
+      return list;
+  }
+}
+
 // ── Sanitization helpers ────────────────────────────────────
 
 /** Strips leading/trailing whitespace and collapses internal runs of spaces */
