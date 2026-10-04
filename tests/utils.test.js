@@ -416,6 +416,25 @@ describe('sanitizeImporte', () => {
     expect(sanitizeImporte('1500,000')).toBe(1500);
   });
 
+  it('rejects the ambiguous es-AR thousands form instead of guessing', () => {
+    // "250.000" es 250 con tres decimales o 250000 en formato es-AR: sin coma
+    // decimal no hay forma de saber cuál es, y leerlo mal corrompe el importe.
+    expect(sanitizeImporte('250.000')).toBeNaN();
+    expect(sanitizeImporte('1.500')).toBeNaN();
+    expect(sanitizeImporte('0.000')).toBeNaN();
+    expect(sanitizeImporte('  250.000 ')).toBeNaN();
+    expect(sanitizeImporte('-250.000')).toBeNaN();
+  });
+
+  it('still accepts every unambiguous neighbour of the ambiguous form', () => {
+    expect(sanitizeImporte('1.500,50')).toBe(1500.5);    // es-AR con decimal
+    expect(sanitizeImporte('1.234.567')).toBe(1234567);  // dos grupos: sin ambigüedad
+    expect(sanitizeImporte('1.23')).toBe(1.23);          // decimal de 2 cifras
+    expect(sanitizeImporte('1.2345')).toBe(1.2345);      // decimal de 4 cifras
+    expect(sanitizeImporte('1234.000')).toBe(1234);      // 4 cifras antes del punto
+    expect(sanitizeImporte('250000')).toBe(250000);
+  });
+
   it('rejects a trailing separator with no digits after it', () => {
     expect(sanitizeImporte('1500,')).toBeNaN();
     expect(sanitizeImporte('1500.')).toBeNaN();
@@ -597,8 +616,36 @@ describe('validateGasto', () => {
     expect(validateGasto({ ...valid, importe: '1.500,50' }).data.importe).toBe(1500.5);
   });
 
+  it('explains how to write an ambiguous importe instead of saying it is invalid', () => {
+    const r = validateGasto({ ...valid, importe: '250.000' });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('es ambiguo');
+    expect(r.errors[0]).toContain('250000');
+    expect(r.errors[0]).toContain('250.000,00');
+  });
+
+  it('names the ambiguous budget and how to write it', () => {
+    const r = validateBudgetUpdate({ vivienda: '250.000' });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('vivienda');
+    expect(r.errors[0]).toContain('es ambiguo');
+  });
+
+  it('still reports a non-ambiguous bad importe as out of range', () => {
+    expect(validateBudgetUpdate({ vivienda: 'abc' }).errors[0])
+      .toBe('El budget para "vivienda" debe ser un número positivo.');
+  });
+
   it('rejects a zero importe', () => {
     expect(validateGasto({ ...valid, importe: 0 }).ok).toBe(false);
+    expect(validateGasto({ ...valid, importe: 0 }).errors)
+      .toContain('El importe debe ser un número mayor que cero.');
+  });
+
+  it('reports an ambiguous ingreso importe', () => {
+    const r = validateIngreso({ descripcion: 'Sueldo', importe: '250.000', mes: 0, tipo: 'sueldo' });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('es ambiguo');
   });
 
   it('rejects a negative importe', () => {

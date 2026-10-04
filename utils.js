@@ -189,11 +189,29 @@ const IMPORTE_GROUP_DOT     = /^[+-]?\d{1,3}(\.\d{3})+(,\d+)?$/;  // 1.234.567,8
 const IMPORTE_GROUP_COMMA   = /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/;  // 1,234,567.89
 const IMPORTE_DECIMAL_COMMA = /^[+-]?\d+(,\d+)?$/;               // 1234,56
 
+// "250.000" es ambiguo: se puede leer como 250 con tres decimales o como 250000
+// en formato es-AR. Los grupos de miles siempre son de a tres, así que un único
+// grupo de tres dígitos separado por punto es exactamente el caso imposible de
+// desambiguar. Elegir una lectura sin avisar corrompe el dato —un alquiler de
+// $250.000 se guardaba como $250—, así que se rechaza y el usuario escribe
+// 250000 o 250.000,00. Sólo aplica al import: los formularios ya traen el
+// importe como número desde <input type="number">.
+const IMPORTE_AMBIGUO = /^[+-]?\d{1,3}\.\d{3}$/;
+
+/** ¿El string tiene la forma ambigua "250.000" (punto de miles o decimal)? */
+function esImporteAmbiguo(value) {
+  return typeof value === 'string' && IMPORTE_AMBIGUO.test(value.trim());
+}
+
+// Cómo escribirlo sin ambigüedad, para el mensaje de error.
+const IMPORTE_AMBIGUO_AYUDA = 'escribilo como 250000 o como 250.000,00';
+
 /**
  * Convierte un importe a número; devuelve NaN si no representa uno válido.
  * Acepta números y strings, incluyendo separador de miles y coma decimal
  * (formatos es-AR y en-US). Rechaza cualquier otro carácter en vez de
- * ignorar la basura: "100abc" es NaN, no 100.
+ * ignorar la basura: "100abc" es NaN, no 100. También rechaza el formato
+ * ambiguo "250.000" (ver IMPORTE_AMBIGUO).
  */
 export function sanitizeImporte(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
@@ -201,6 +219,7 @@ export function sanitizeImporte(value) {
 
   const s = value.trim();
   if (s === '') return NaN;
+  if (IMPORTE_AMBIGUO.test(s)) return NaN;
 
   let normalized;
   if (IMPORTE_PLAIN.test(s)) {
@@ -245,7 +264,9 @@ export function validateBudgetUpdate(updates) {
   for (const [catKey, value] of Object.entries(updates)) {
     const amount = sanitizeImporte(value);
     if (isNaN(amount) || amount < 0) {
-      errors.push(`El budget para "${catKey}" debe ser un número positivo.`);
+      errors.push(esImporteAmbiguo(value)
+        ? `El budget para "${catKey}" es ambiguo ("${String(value).trim()}"); ${IMPORTE_AMBIGUO_AYUDA}.`
+        : `El budget para "${catKey}" debe ser un número positivo.`);
     } else if (amount > MAX_BUDGET_AMOUNT) {
       errors.push(`El budget para "${catKey}" es demasiado alto.`);
     } else {
@@ -278,7 +299,13 @@ export function validateGasto(g) {
 
   if (!detalle)                       errors.push('El detalle no puede estar vacío.');
   if (detalle.length > 120)           errors.push('El detalle no puede superar los 120 caracteres.');
-  if (isNaN(importe) || importe <= 0) errors.push('El importe debe ser un número mayor que cero.');
+  if (isNaN(importe)) {
+    errors.push(esImporteAmbiguo(g.importe)
+      ? `El importe "${String(g.importe).trim()}" es ambiguo: el punto puede ser decimal o de miles; ${IMPORTE_AMBIGUO_AYUDA}.`
+      : 'El importe debe ser un número mayor que cero.');
+  } else if (importe <= 0) {
+    errors.push('El importe debe ser un número mayor que cero.');
+  }
   if (importe > 999_999_999)          errors.push('El importe es demasiado alto.');
   if (!categoria)                     errors.push('Seleccioná una categoría.');
 
@@ -301,7 +328,13 @@ export function validateIngreso(ing) {
 
   if (!descripcion)                   errors.push('La descripción no puede estar vacía.');
   if (descripcion.length > 120)       errors.push('La descripción no puede superar los 120 caracteres.');
-  if (isNaN(importe) || importe <= 0) errors.push('El importe debe ser un número mayor que cero.');
+  if (isNaN(importe)) {
+    errors.push(esImporteAmbiguo(ing.importe)
+      ? `El importe "${String(ing.importe).trim()}" es ambiguo: el punto puede ser decimal o de miles; ${IMPORTE_AMBIGUO_AYUDA}.`
+      : 'El importe debe ser un número mayor que cero.');
+  } else if (importe <= 0) {
+    errors.push('El importe debe ser un número mayor que cero.');
+  }
   if (importe > 999_999_999)          errors.push('El importe es demasiado alto.');
 
   if (errors.length > 0) return { ok: false, errors };

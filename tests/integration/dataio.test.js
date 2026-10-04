@@ -107,18 +107,17 @@ describe('importación', () => {
     expect($('#dash-recientes .gasto-amount').textContent).toBe('$1.501');
   });
 
-  it('trata un punto sin coma decimal como decimal, no como miles', async () => {
-    await bootApp();
+  it('rechaza un importe ambiguo en vez de guardarlo como 250', async () => {
+    await bootApp(estadoPropio());
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const estado = estadoPropio();
     estado.gastos[0].importe = '250.000';
 
     pickFile(jsonFile(JSON.stringify(estado)));
-    await waitForToast('Datos importados');
+    await waitForToast('gasto(s) con datos inválidos');
 
-    // '250.000' es un número plano válido (250 con tres decimales) y se parsea
-    // como tal; el separador de miles sólo se reconoce si hay coma decimal o
-    // dos grupos de punto. Documentado como comportamiento actual.
-    expect(getStoredState().gastos[0].importe).toBe(250);
+    // "250.000" puede ser 250 o 250000: se rechaza en lugar de corrupto.
+    expect(getStoredState().gastos[0].importe).toBe(950000);
   });
 
   it('rechaza un JSON inválido y conserva el estado actual', async () => {

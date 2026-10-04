@@ -93,6 +93,23 @@ describe('alta de gastos', () => {
     expect(getStoredState().gastos).toHaveLength(0);
   });
 
+  it('rechaza en el formulario un importe ambiguo y explica cómo escribirlo', async () => {
+    await bootApp();
+    navTo('gastos');
+
+    // <input type="number"> acepta "250.000" como número válido (250 con tres
+    // decimales), así que el caso ambiguo también entra desde el formulario.
+    crearGasto(nuevoGasto({ importe: '250.000' }));
+
+    expect(toastText()).toContain('es ambiguo');
+    expect(toastText()).toContain('250.000,00');
+    expect(getStoredState().gastos).toHaveLength(0);
+
+    // Sin ambiguüedad, el mismo importe se guarda.
+    crearGasto(nuevoGasto({ importe: '250000' }));
+    expect(getStoredState().gastos[0].importe).toBe(250000);
+  });
+
   it('normaliza el importe del formulario a número', async () => {
     await bootApp();
     navTo('gastos');
