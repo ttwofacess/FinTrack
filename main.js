@@ -27,8 +27,19 @@ const getS  = () => STATE;
 // cambio se quedó sólo en memoria.
 const saveS = () => setState(STATE);
 
+let refreshing = false;
+
 function registerServiceWorker() {
+  // Todo lo del service worker cuelga de esteAPI: el listener de
+  // controllerchange va acá también porque registrarlo a nivel de módulo
+  // reventaba la app entera en un browser sin soporte.
   if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
@@ -50,13 +61,6 @@ function registerServiceWorker() {
       });
   });
 }
-
-let refreshing = false;
-navigator.serviceWorker.addEventListener('controllerchange', () => {
-  if (refreshing) return;
-  refreshing = true;
-  window.location.reload();
-});
 
 function initInstallButton() {
   const installButton = document.getElementById('btn-install-app');

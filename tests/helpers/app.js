@@ -98,13 +98,17 @@ function mountIndexHtml() {
  * Boots main.js against a fresh DOM + localStorage.
  * @param {object} [seed] — state to pre-persist before booting. Defaults to an
  *   empty state on Enero so tests don't depend on the real current month.
+ * @param {object} [opts]
+ * @param {boolean} [opts.serviceWorker=true] — false para simular un browser
+ *   sin soporte de service workers.
  */
-export async function bootApp(seed) {
+export async function bootApp(seed, { serviceWorker = true } = {}) {
   await drainAsync();
   vi.resetModules();
   mountIndexHtml();
   localStorage.clear();
   setStoredState(seed ?? stateWith((s) => { s.selectedMonth = 0; }));
+  if (!serviceWorker) delete navigator.serviceWorker;
   await import('../../main.js');
 }
 
