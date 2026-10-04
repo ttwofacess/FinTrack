@@ -102,6 +102,17 @@
       <div class="pill" id="gastos-total-pill">$0 total</div>
     </div>
     <div class="month-selector" id="gastos-months"></div>
+    <div class="search-row">
+      <input class="form-input search-input" type="search" id="gastos-search"
+             placeholder="Buscar gasto…" aria-label="Buscar gastos por detalle o categoría"
+             autocomplete="off" enterkeyhint="search" maxlength="120">
+      <select class="form-select sort-select" id="gastos-sort" aria-label="Ordenar gastos">
+        <option value="recientes">Recientes</option>
+        <option value="monto-desc">Monto ↓</option>
+        <option value="monto-asc">Monto ↑</option>
+        <option value="categoria">Categoría</option>
+      </select>
+    </div>
     <div class="filter-row" id="gastos-filters"></div>
     <div class="glow-line"></div>
     <div class="gastos-list" id="gastos-list"></div>
