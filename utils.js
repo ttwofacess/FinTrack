@@ -348,6 +348,40 @@ export function validateBudgetUpdate(updates) {
   return { ok: true, errors: [], data: cleanData };
 }
 
+export const META_TIPOS = ['porcentaje', 'monto'];
+
+/**
+ * Valida la meta de ahorro.
+ * Un `tipo` desconocido no es un error: cae a 'porcentaje' (el primer valor de
+ * la allowlist), igual que hace sanitizeEnum con el medio de pago. El valor sí
+ * tiene que ser un número >= 0, y el techo depende del tipo: 100% para un
+ * porcentaje, MAX_BUDGET_AMOUNT para un monto.
+ *
+ * @param {object} m — { tipo, valor }
+ * @returns {{ ok: boolean, errors: string[], data?: { tipo: string, valor: number } }}
+ */
+export function validateMetaAhorro(m) {
+  const tipo  = sanitizeEnum(m?.tipo, META_TIPOS);
+  const valor = sanitizeImporte(m?.valor);
+
+  if (isNaN(valor)) {
+    return { ok: false, errors: [esImporteAmbiguo(m?.valor)
+      ? `La meta "${String(m.valor).trim()}" es ambigua: el punto puede ser decimal o de miles; ${IMPORTE_AMBIGUO_AYUDA}.`
+      : 'La meta debe ser un número mayor o igual a cero.'] };
+  }
+  if (valor < 0) {
+    return { ok: false, errors: ['La meta debe ser un número mayor o igual a cero.'] };
+  }
+  if (tipo === 'porcentaje' && valor > 100) {
+    return { ok: false, errors: ['El porcentaje no puede superar 100.'] };
+  }
+  if (tipo === 'monto' && valor > MAX_BUDGET_AMOUNT) {
+    return { ok: false, errors: ['La meta es demasiado alta.'] };
+  }
+
+  return { ok: true, errors: [], data: { tipo, valor } };
+}
+
 // ── Validation ──────────────────────────────────────────────
 
 const VALID_MEDIOS     = ['efectivo', 'debito', 'credito', 'transferencia', 'otro'];

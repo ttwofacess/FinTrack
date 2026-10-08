@@ -7,8 +7,8 @@ import {
   getCardDebtAtEnd, getCardDebtAtStart, getCardBalanceAtEnd, totalBudgetMonth, gastoByCat,
   sanitizeText, sanitizeImporte, sanitizeMes, sanitizeEnum,
   normalizeText, matchesQuery, sortRecords, SORT_MODES,
-  validateBudgetUpdate, validateGasto, validateIngreso,
-  MAX_BUDGET_AMOUNT,
+  validateBudgetUpdate, validateMetaAhorro, validateGasto, validateIngreso,
+  MAX_BUDGET_AMOUNT, META_TIPOS,
 } from '../utils.js';
 import { ALL_CATS, MESES } from '../constants.js';
 
@@ -692,6 +692,91 @@ describe('validateBudgetUpdate', () => {
 
   it('accepts an empty payload', () => {
     expect(validateBudgetUpdate({})).toEqual({ ok: true, errors: [], data: {} });
+  });
+});
+
+describe('validateMetaAhorro', () => {
+  it('accepts a percentage goal', () => {
+    const r = validateMetaAhorro({ tipo: 'porcentaje', valor: '20' });
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.data).toEqual({ tipo: 'porcentaje', valor: 20 });
+  });
+
+  it('accepts a fixed amount goal', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: 250000 });
+    expect(r.ok).toBe(true);
+    expect(r.data).toEqual({ tipo: 'monto', valor: 250000 });
+  });
+
+  it('accepts 0 as a valid goal (no goal set)', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: 0 }).ok).toBe(true);
+  });
+
+  it('accepts the boundary percentages 0 and 100', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: 0 }).ok).toBe(true);
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: 100 }).ok).toBe(true);
+  });
+
+  it('accepts a decimal percentage', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: '12.5' }).data.valor).toBe(12.5);
+  });
+
+  it('rejects a percentage above 100', () => {
+    const r = validateMetaAhorro({ tipo: 'porcentaje', valor: 101 });
+    expect(r.ok).toBe(false);
+    expect(r.data).toBeUndefined();
+    expect(r.errors[0]).toContain('no puede superar 100');
+  });
+
+  it('rejects a negative goal', () => {
+    const r = validateMetaAhorro({ tipo: 'porcentaje', valor: -1 });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('mayor o igual a cero');
+  });
+
+  it('rejects a non-numeric goal', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: 'abc' });
+    expect(r.ok).toBe(false);
+    expect(r.data).toBeUndefined();
+  });
+
+  it('rejects a missing goal', () => {
+    expect(validateMetaAhorro(undefined).ok).toBe(false);
+    expect(validateMetaAhorro({}).ok).toBe(false);
+  });
+
+  it('rejects the ambiguous "250.000" format with a hint on how to write it', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: '250.000' });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('es ambigua');
+  });
+
+  it('falls back to porcentaje for an unknown tipo', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentoje', valor: 30 }).data)
+      .toEqual({ tipo: 'porcentaje', valor: 30 });
+    expect(validateMetaAhorro({ valor: 30 }).data)
+      .toEqual({ tipo: 'porcentaje', valor: 30 });
+  });
+
+  it('rejects a monto above MAX_BUDGET_AMOUNT', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: MAX_BUDGET_AMOUNT + 1 });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('demasiado alta');
+  });
+
+  it('accepts exactly MAX_BUDGET_AMOUNT as a monto', () => {
+    expect(validateMetaAhorro({ tipo: 'monto', valor: MAX_BUDGET_AMOUNT }).ok).toBe(true);
+  });
+
+  it('does not apply the percentage cap to a monto', () => {
+    expect(validateMetaAhorro({ tipo: 'monto', valor: 500 }).ok).toBe(true);
+  });
+
+  it('accepts every declared tipo', () => {
+    for (const tipo of META_TIPOS) {
+      expect(validateMetaAhorro({ tipo, valor: 10 }).ok).toBe(true);
+    }
   });
 });
 

@@ -36,3 +36,8 @@ export const CAT_VARIABLES = [
 ];
 
 export const ALL_CATS = [...CAT_FIJOS, ...CAT_VARIABLES];
+
+// Meta de ahorro: puede ser un % de los ingresos del mes o un monto fijo.
+// Vive acá y no en store.js para que el default sea compartido por el store y
+// por los helpers de utils.js sin generar un import circular entre ambos.
+export const DEFAULT_META_AHORRO = { tipo: 'porcentaje', valor: 0 };
