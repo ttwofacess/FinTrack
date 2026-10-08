@@ -4,7 +4,7 @@
 // derivados del estado. No tocan el DOM ni localStorage.
 // ============================================================
 
-import { ALL_CATS } from './constants.js';
+import { ALL_CATS, DEFAULT_META_AHORRO } from './constants.js';
 
 /** Formatea un número como pesos argentinos */
 export function fmt(n) {
@@ -168,6 +168,127 @@ export function gastoByCat(state, mi, catKey) {
   return gastosByMonth(state, mi)
     .filter(g => g.categoria === catKey)
     .reduce((s, g) => s + (g.importe || 0), 0);
+}
+
+// ── Comparativa mensual y meta de ahorro ────────────────────
+//
+// Helpers puros que cruzan el mes seleccionado con el anterior. Viven acá y no
+// en el render porque la UI sólo los interpola: testeables sin fixtures de DOM.
+
+/**
+ * Balance del mes: exactamente lo que muestra el hero del dashboard
+ * (ingresos − gastos que no son de crédito). Es la base de las comparativas y
+ * de la meta, para que los números de la pantalla cierren entre sí.
+ */
+export function getBalanceMes(state, mi) {
+  return totalIngresosMonth(state, mi) - totalCashGastosMonth(state, mi);
+}
+
+/**
+ * Ahorro del mes. Decisión D1: hoy es el balance, la misma definición que usa
+ * el badge de "tasa ahorro". Si alguna vez se quiere contar además los depósitos
+ * de la categoría 'ahorro' (opción B), se cambia sólo esta función:
+ *
+ *   const depositos = cashGastosByMonth(state, mi)
+ *     .filter(g => g.categoria === 'ahorro')
+ *     .reduce((s, g) => s + (g.importe || 0), 0);
+ *   return getBalanceMes(state, mi) + depositos;
+ */
+export function getAhorroMes(state, mi) {
+  return getBalanceMes(state, mi);
+}
+
+/** ¿El mes tiene algún movimiento? Un mes vacío no es un balance 0: no se compara. */
+export function hayDatosMes(state, mi) {
+  return gastosByMonth(state, mi).length > 0 || ingresosByMonth(state, mi).length > 0;
+}
+
+/**
+ * Variación porcentual entre dos montos, o null si no hay base de comparación
+ * (previo 0 o ausente). Devolver null en vez de Infinity es lo que permite al
+ * render mostrar el monto en pesos cuando el mes anterior cerró en 0.
+ *
+ * El denominador va con abs() a propósito: con previo negativo, pasar de −100 a
+ * +50 es una mejora, y sin el abs la fórmula daría −150%.
+ */
+export function variacionPct(actual, previo) {
+  if (!previo) return null;
+  return ((actual - previo) / Math.abs(previo)) * 100;
+}
+
+/**
+ * Comparativa del balance contra el mes anterior, o null si no es comparable.
+ * Enero no tiene mes anterior dentro del año (los registros no guardan año) y un
+ * mes previo sin movimientos tampoco sirve de base.
+ */
+export function getComparativaBalance(state, mi) {
+  if (mi <= 0 || !hayDatosMes(state, mi - 1)) return null;
+  const actual = getBalanceMes(state, mi);
+  const previo = getBalanceMes(state, mi - 1);
+  return { actual, previo, diff: actual - previo, pct: variacionPct(actual, previo) };
+}
+
+/**
+ * Delta de gasto por categoría contra el mes anterior.
+ * @returns {Object} { [catKey]: { actual, previo, diff, pct } } — en enero o
+ *                    con el mes previo vacío, previo/diff/pct vienen en null.
+ *
+ * Usa gastoByCat (incluye el crédito) para ser consistente con las barras del
+ * bar chart, que no distinguen el medio de pago.
+ */
+export function deltasCategorias(state, mi) {
+  const comparable = mi > 0 && hayDatosMes(state, mi - 1);
+  const out = {};
+  for (const c of ALL_CATS) {
+    const actual = gastoByCat(state, mi, c.key);
+    const previo = comparable ? gastoByCat(state, mi - 1, c.key) : null;
+    out[c.key] = {
+      actual,
+      previo,
+      diff: previo === null ? null : actual - previo,
+      pct:  previo === null ? null : variacionPct(actual, previo),
+    };
+  }
+  return out;
+}
+
+/**
+ * Los 12 balances del año para el sparkline, uno por mes.
+ * Los meses sin movimientos vienen en null, no en 0: un mes vacío no es un
+ * balance cero y dibujarlo así armaría una caída falsa en la línea.
+ */
+export function getBalancesAnuales(state) {
+  return Array.from({ length: 12 }, (_, i) =>
+    hayDatosMes(state, i) ? getBalanceMes(state, i) : null);
+}
+
+/**
+ * Monto objetivo de la meta para el mes. Con tipo 'porcentaje' depende de los
+ * ingresos del mes, así que devuelve 0 si el mes no tuvo ingresos.
+ */
+export function metaAhorroMonto(state, mi) {
+  const { tipo, valor } = state.metaAhorro || DEFAULT_META_AHORRO;
+  return tipo === 'porcentaje' ? (totalIngresosMonth(state, mi) * valor) / 100 : valor;
+}
+
+/**
+ * Avance contra la meta de ahorro del mes.
+ * @returns {{ meta: number, ahorro: number, pct: number|null,
+ *             cumplida: boolean, faltante: number }}
+ * pct es null cuando no hay meta calculable (valor 0, o porcentaje sin ingresos):
+ * sin objetivo no hay porcentaje que mostrar.
+ */
+export function progresoMetaAhorro(state, mi) {
+  const meta   = metaAhorroMonto(state, mi);
+  const ahorro = getAhorroMes(state, mi);
+  if (!(meta > 0)) return { meta, ahorro, pct: null, cumplida: false, faltante: 0 };
+  return {
+    meta,
+    ahorro,
+    pct: (ahorro / meta) * 100,
+    cumplida: ahorro >= meta,
+    faltante: Math.max(0, meta - ahorro),
+  };
 }
 
 // ── Búsqueda y orden ───────────────────────────────────────
