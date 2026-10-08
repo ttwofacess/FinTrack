@@ -5,8 +5,11 @@
 // ============================================================
 
 import { MESES, CAT_FIJOS, CAT_VARIABLES } from './constants.js';
-import { fmt, ingresosByMonth, totalIngresosMonth, gastoByCat, validateBudgetUpdate, html } from './utils.js';
-import { buildMonthSelector, showToast, toastSinPersistencia } from './ui.js';
+import {
+  fmt, ingresosByMonth, totalIngresosMonth, gastoByCat,
+  validateBudgetUpdate, validateMetaAhorro, html
+} from './utils.js';
+import { buildMonthSelector, showToast, toastSinPersistencia, closeModals } from './ui.js';
 
 let presupTab = 'fijos';
 
@@ -151,5 +154,63 @@ export function initPresupuestoEvents(getState, onMonthChange, onBudgetSave) {
       renderPresupuesto(getState(), onMonthChange, onBudgetSave);
       return persisted;
     });
+  });
+}
+
+// ── Modal de meta de ahorro ───────────────────────────────
+//
+// La card vive en el dashboard pero el modal se maneja desde acá, junto al de
+// presupuesto: es el otro caso de "objetivo que el usuario define a mano y se
+// guarda con su propia validación", así que comparten el mismo flujo.
+
+/** El tipo elegido cambia la etiqueta del campo y su techo. */
+function _syncMetaLabel() {
+  const esPct = document.getElementById('fm-tipo').value === 'porcentaje';
+  document.getElementById('fm-valor-label').textContent = esPct ? 'Porcentaje (%)' : 'Monto ($)';
+  document.getElementById('fm-valor').max = esPct ? '100' : '';
+}
+
+/**
+ * Abre el modal de la meta precargado con el valor guardado.
+ * @param {object} state
+ */
+export function openMetaModal(state) {
+  const { tipo, valor } = state.metaAhorro;
+
+  document.getElementById('fm-tipo').value  = tipo;
+  document.getElementById('fm-valor').value = valor || '';
+  _syncMetaLabel();
+  document.getElementById('modal-meta').classList.add('open');
+  document.getElementById('fm-valor').focus();
+}
+
+/**
+ * Registra los listeners del modal de la meta (llamar una sola vez en init).
+ * @param {Function} getState
+ * @param {Function} onMetaSave — (meta) => boolean|undefined; false = no persistió
+ */
+export function initMetaModal(getState, onMetaSave) {
+  document.getElementById('btn-edit-meta').addEventListener('click', () => {
+    openMetaModal(getState());
+  });
+  document.getElementById('fm-tipo').addEventListener('change', _syncMetaLabel);
+
+  document.getElementById('btn-save-meta').addEventListener('click', () => {
+    const result = validateMetaAhorro({
+      tipo:  document.getElementById('fm-tipo').value,
+      valor: document.getElementById('fm-valor').value,
+    });
+
+    // Un valor inválido deja el modal abierto: el usuario corrigió algo mal y
+    // cerrar lo obligaría a reabrirlo y volver a escribir todo.
+    if (!result.ok) {
+      showToast('❌ ' + result.errors[0]);
+      return;
+    }
+
+    const persisted = onMetaSave(result.data);
+    closeModals();
+    if (persisted === false) toastSinPersistencia('Meta de ahorro');
+    else showToast('✓ Meta guardada');
   });
 }

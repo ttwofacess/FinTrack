@@ -5,10 +5,12 @@ import {
   cashGastosByMonth, creditGastosByMonth, cardPaymentsByMonth,
   totalCashGastosMonth, totalCreditGastosMonth, totalCardPaymentsMonth,
   getCardDebtAtEnd, getCardDebtAtStart, getCardBalanceAtEnd, totalBudgetMonth, gastoByCat,
+  getBalanceMes, getAhorroMes, hayDatosMes, variacionPct, getComparativaBalance,
+  deltasCategorias, getBalancesAnuales, metaAhorroMonto, progresoMetaAhorro,
   sanitizeText, sanitizeImporte, sanitizeMes, sanitizeEnum,
   normalizeText, matchesQuery, sortRecords, SORT_MODES,
-  validateBudgetUpdate, validateGasto, validateIngreso,
-  MAX_BUDGET_AMOUNT,
+  validateBudgetUpdate, validateMetaAhorro, validateGasto, validateIngreso,
+  MAX_BUDGET_AMOUNT, META_TIPOS,
 } from '../utils.js';
 import { ALL_CATS, MESES } from '../constants.js';
 
@@ -333,6 +335,289 @@ describe('gastoByCat', () => {
       gasto({ id: '3', categoria: 'salidas', importe: 50 }),
     ]);
     expect(gastoByCat(mixed, 0, 'salidas')).toBe(150);
+  });
+});
+
+describe('getBalanceMes / getAhorroMes / hayDatosMes', () => {
+  const ingreso = (mes, importe) => ({ id: 'i' + mes, descripcion: 'Sueldo', importe, mes, tipo: 'sueldo' });
+
+  it('is ingresos minus cash gastos, like the dashboard hero', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, importe: 1000 }),
+      gasto({ id: '2', mes: 0, importe: 500, medio: 'credito' }),
+    ], [ingreso(0, 2000)]);
+    expect(getBalanceMes(s, 0)).toBe(1000);
+  });
+
+  it('can go negative', () => {
+    const s = stateWith([gasto({ mes: 0, importe: 3000 })], [ingreso(0, 1000)]);
+    expect(getBalanceMes(s, 0)).toBe(-2000);
+  });
+
+  it('counts savings deposits as part of the balance (decisión D1)', () => {
+    const s = stateWith([gasto({ mes: 0, categoria: 'ahorro', importe: 200 })], [ingreso(0, 1000)]);
+    expect(getAhorroMes(s, 0)).toBe(getBalanceMes(s, 0));
+    expect(getAhorroMes(s, 0)).toBe(800);
+  });
+
+  it('reports whether a month has any movement at all', () => {
+    const s = stateWith([gasto({ mes: 1, importe: 10 })], [ingreso(3, 100)]);
+    expect(hayDatosMes(s, 1)).toBe(true);
+    expect(hayDatosMes(s, 3)).toBe(true);
+    expect(hayDatosMes(s, 2)).toBe(false);
+    expect(hayDatosMes(stateWith(), 0)).toBe(false);
+  });
+
+  it('treats a month with data that nets to 0 as a month with data', () => {
+    const s = stateWith([gasto({ mes: 0, importe: 100 })], [ingreso(0, 100)]);
+    expect(getBalanceMes(s, 0)).toBe(0);
+    expect(hayDatosMes(s, 0)).toBe(true);
+  });
+});
+
+describe('variacionPct', () => {
+  it('measures an increase', () => {
+    expect(variacionPct(120, 100)).toBe(20);
+  });
+
+  it('measures a decrease', () => {
+    expect(variacionPct(80, 100)).toBe(-20);
+  });
+
+  it('returns 0 for no change', () => {
+    expect(variacionPct(100, 100)).toBe(0);
+  });
+
+  it('uses abs(previo), so recovering from a negative base is an improvement', () => {
+    expect(variacionPct(50, -100)).toBe(150);
+    expect(variacionPct(-50, 100)).toBe(-150);
+  });
+
+  it('returns null when there is no base to compare against', () => {
+    expect(variacionPct(500, 0)).toBeNull();
+    expect(variacionPct(500, undefined)).toBeNull();
+    expect(variacionPct(0, 0)).toBeNull();
+  });
+});
+
+describe('getComparativaBalance', () => {
+  const state = stateWith([
+    gasto({ id: 'g0', mes: 0, importe: 4000 }),   // balance enero: 6000 - 4000 = 2000
+    gasto({ id: 'g1', mes: 1, importe: 3000 }),   // balance febrero: 6000 - 3000 = 3000
+  ], [
+    { id: 'i0', descripcion: 'Sueldo', importe: 6000, mes: 0, tipo: 'sueldo' },
+    { id: 'i1', descripcion: 'Sueldo', importe: 6000, mes: 1, tipo: 'sueldo' },
+  ]);
+
+  it('returns null in January: the records carry no year, so there is no previous month', () => {
+    expect(getComparativaBalance(state, 0)).toBeNull();
+  });
+
+  it('returns null when the previous month has no movements', () => {
+    const s = stateWith([gasto({ mes: 5, importe: 100 })], []);
+    expect(getComparativaBalance(s, 5)).toBeNull();
+  });
+
+  it('returns null when neither month has movements', () => {
+    expect(getComparativaBalance(stateWith(), 3)).toBeNull();
+  });
+
+  it('compares a month with an improvement', () => {
+    expect(getComparativaBalance(state, 1)).toEqual({
+      actual: 3000, previo: 2000, diff: 1000, pct: 50,
+    });
+  });
+
+  it('compares a month with a drop', () => {
+    const caido = stateWith([
+      gasto({ id: 'a', mes: 0, importe: 1000 }),
+      gasto({ id: 'b', mes: 1, importe: 4000 }),
+    ], [
+      { id: 'i0', descripcion: 'Sueldo', importe: 5000, mes: 0, tipo: 'sueldo' },
+      { id: 'i1', descripcion: 'Sueldo', importe: 5000, mes: 1, tipo: 'sueldo' },
+    ]);
+    expect(getComparativaBalance(caido, 1)).toEqual({
+      actual: 1000, previo: 4000, diff: -3000, pct: -75,
+    });
+  });
+
+  it('returns pct null (not Infinity) when the previous month closed at 0', () => {
+    const s = stateWith([
+      gasto({ mes: 0, importe: 5000 }),   // enero cierra en 0
+      gasto({ mes: 1, importe: 1000 }),
+    ], [
+      { id: 'i0', descripcion: 'Sueldo', importe: 5000, mes: 0, tipo: 'sueldo' },
+      { id: 'i1', descripcion: 'Sueldo', importe: 5000, mes: 1, tipo: 'sueldo' },
+    ]);
+    const c = getComparativaBalance(s, 1);
+    expect(c.previo).toBe(0);
+    expect(c.pct).toBeNull();
+    expect(c.diff).toBe(4000);
+  });
+
+  it('does not let credit purchases distort the balance base', () => {
+    const s = stateWith([
+      gasto({ id: 'a', mes: 0, importe: 1000, medio: 'credito' }),
+      gasto({ id: 'b', mes: 1, importe: 1000 }),
+    ], [
+      { id: 'i0', descripcion: 'Sueldo', importe: 2000, mes: 0, tipo: 'sueldo' },
+      { id: 'i1', descripcion: 'Sueldo', importe: 2000, mes: 1, tipo: 'sueldo' },
+    ]);
+    expect(getComparativaBalance(s, 1)).toEqual({
+      actual: 1000, previo: 2000, diff: -1000, pct: -50,
+    });
+  });
+});
+
+describe('deltasCategorias', () => {
+  it('covers every category', () => {
+    const d = deltasCategorias(stateWith(), 3);
+    expect(Object.keys(d)).toHaveLength(ALL_CATS.length);
+    for (const c of ALL_CATS) expect(d[c.key]).toBeDefined();
+  });
+
+  it('returns all-null deltas in January', () => {
+    const d = deltasCategorias(stateWith([gasto({ mes: 0, categoria: 'salidas', importe: 100 })]), 0);
+    expect(d.salidas).toEqual({ actual: 100, previo: null, diff: null, pct: null });
+  });
+
+  it('returns all-null deltas when the previous month is empty', () => {
+    const d = deltasCategorias(stateWith([gasto({ mes: 4, categoria: 'salidas', importe: 100 })]), 4);
+    expect(d.salidas.pct).toBeNull();
+  });
+
+  it('reports an increase and a decrease against the previous month', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, categoria: 'alimentacion', importe: 200 }),
+      gasto({ id: '2', mes: 1, categoria: 'alimentacion', importe: 300 }),
+      gasto({ id: '3', mes: 0, categoria: 'salidas', importe: 400 }),
+      gasto({ id: '4', mes: 1, categoria: 'salidas', importe: 100 }),
+    ]);
+    const d = deltasCategorias(s, 1);
+    expect(d.alimentacion).toEqual({ actual: 300, previo: 200, diff: 100, pct: 50 });
+    expect(d.salidas).toEqual({ actual: 100, previo: 400, diff: -300, pct: -75 });
+  });
+
+  it('gives pct null for a category that appears this month (no base)', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, categoria: 'vivienda', importe: 100 }),
+      gasto({ id: '2', mes: 1, categoria: 'mascotas', importe: 250 }),
+    ]);
+    const d = deltasCategorias(s, 1);
+    expect(d.mascotas).toEqual({ actual: 250, previo: 0, diff: 250, pct: null });
+  });
+
+  it('reports -100% for a category that disappears', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, categoria: 'regalos', importe: 300 }),
+      gasto({ id: '2', mes: 1, categoria: 'salud', importe: 100 }),
+    ]);
+    const d = deltasCategorias(s, 1);
+    expect(d.regalos).toEqual({ actual: 0, previo: 300, diff: -300, pct: -100 });
+  });
+
+  it('includes credit purchases, like the bar chart it annotates', () => {
+    const s = stateWith([
+      gasto({ id: '1', mes: 0, categoria: 'salidas', importe: 100, medio: 'credito' }),
+      gasto({ id: '2', mes: 1, categoria: 'salidas', importe: 150, medio: 'credito' }),
+    ]);
+    const d = deltasCategorias(s, 1);
+    expect(d.salidas).toEqual({ actual: 150, previo: 100, diff: 50, pct: 50 });
+  });
+
+  it('does not mutate the state', () => {
+    const s = stateWith([gasto({ mes: 0, categoria: 'salidas', importe: 100 })]);
+    deltasCategorias(s, 1);
+    expect(s.gastos).toHaveLength(1);
+  });
+});
+
+describe('getBalancesAnuales', () => {
+  it('always returns 12 slots, one per month', () => {
+    expect(getBalancesAnuales(stateWith())).toHaveLength(12);
+  });
+
+  it('leaves months without movements as null instead of 0', () => {
+    const balances = getBalancesAnuales(stateWith([
+      gasto({ mes: 1, importe: 500 }),
+      gasto({ mes: 5, importe: 100 }),
+    ], [
+      { id: 'i1', descripcion: 'Sueldo', importe: 1000, mes: 1, tipo: 'sueldo' },
+    ]));
+    expect(balances[0]).toBeNull();
+    expect(balances[1]).toBe(500);
+    expect(balances[4]).toBeNull();
+    expect(balances[5]).toBe(-100);
+  });
+
+  it('does not count an empty net-zero month as data', () => {
+    expect(getBalancesAnuales(stateWith())[11]).toBeNull();
+  });
+});
+
+describe('metaAhorroMonto / progresoMetaAhorro', () => {
+  const conMeta = (meta, gastos = [], ingresos = []) => ({ ...stateWith(gastos, ingresos), metaAhorro: meta });
+
+  const ingreso = (mes, importe) => ({ id: 'i' + mes, descripcion: 'Sueldo', importe, mes, tipo: 'sueldo' });
+
+  it('turns a percentage into an amount based on the month income', () => {
+    const s = conMeta({ tipo: 'porcentaje', valor: 20 }, [], [ingreso(0, 1000)]);
+    expect(metaAhorroMonto(s, 0)).toBe(200);
+  });
+
+  it('returns a fixed amount as-is', () => {
+    const s = conMeta({ tipo: 'monto', valor: 300000 }, [], [ingreso(0, 1000)]);
+    expect(metaAhorroMonto(s, 0)).toBe(300000);
+  });
+
+  it('falls back to the default meta when the state has none', () => {
+    expect(metaAhorroMonto(stateWith([], [ingreso(0, 1000)]), 0)).toBe(0);
+  });
+
+  it('reports pct null when there is no goal set', () => {
+    const p = progresoMetaAhorro(conMeta({ tipo: 'porcentaje', valor: 0 }, [], [ingreso(0, 1000)]), 0);
+    expect(p).toEqual({ meta: 0, ahorro: 1000, pct: null, cumplida: false, faltante: 0 });
+  });
+
+  it('reports pct null for a percentage goal in a month without income', () => {
+    const p = progresoMetaAhorro(conMeta({ tipo: 'porcentaje', valor: 20 }), 3);
+    expect(p.meta).toBe(0);
+    expect(p.pct).toBeNull();
+    expect(p.cumplida).toBe(false);
+  });
+
+  it('reports the real pct even when the balance beats the goal', () => {
+    const s = conMeta({ tipo: 'porcentaje', valor: 20 }, [gasto({ mes: 0, importe: 250 })], [ingreso(0, 1000)]);
+    expect(progresoMetaAhorro(s, 0)).toEqual({
+      meta: 200, ahorro: 750, pct: 375, cumplida: true, faltante: 0,
+    });
+  });
+
+  it('marks a goal as pending with the missing amount', () => {
+    const s = conMeta({ tipo: 'monto', valor: 500 }, [gasto({ mes: 0, importe: 800 })], [ingreso(0, 1000)]);
+    expect(progresoMetaAhorro(s, 0)).toEqual({
+      meta: 500, ahorro: 200, pct: 40, cumplida: false, faltante: 300,
+    });
+  });
+
+  it('returns a negative pct when the month ended in the red', () => {
+    const s = conMeta({ tipo: 'monto', valor: 400 }, [gasto({ mes: 0, importe: 1200 })], [ingreso(0, 1000)]);
+    const p = progresoMetaAhorro(s, 0);
+    expect(p.ahorro).toBe(-200);
+    expect(p.pct).toBe(-50);
+    expect(p.faltante).toBe(600);
+  });
+
+  it('allows pct above 100 and keeps cumplida true', () => {
+    const s = conMeta({ tipo: 'monto', valor: 400 }, [gasto({ mes: 0, importe: 400 })], [ingreso(0, 1000)]);
+    const p = progresoMetaAhorro(s, 0);
+    expect(p.pct).toBe(150);
+    expect(p.cumplida).toBe(true);
+  });
+
+  it('counts a goal reached exactly as fulfilled', () => {
+    const s = conMeta({ tipo: 'monto', valor: 1000 }, [], [ingreso(0, 1000)]);
+    expect(progresoMetaAhorro(s, 0).cumplida).toBe(true);
   });
 });
 
@@ -692,6 +977,91 @@ describe('validateBudgetUpdate', () => {
 
   it('accepts an empty payload', () => {
     expect(validateBudgetUpdate({})).toEqual({ ok: true, errors: [], data: {} });
+  });
+});
+
+describe('validateMetaAhorro', () => {
+  it('accepts a percentage goal', () => {
+    const r = validateMetaAhorro({ tipo: 'porcentaje', valor: '20' });
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(r.data).toEqual({ tipo: 'porcentaje', valor: 20 });
+  });
+
+  it('accepts a fixed amount goal', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: 250000 });
+    expect(r.ok).toBe(true);
+    expect(r.data).toEqual({ tipo: 'monto', valor: 250000 });
+  });
+
+  it('accepts 0 as a valid goal (no goal set)', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: 0 }).ok).toBe(true);
+  });
+
+  it('accepts the boundary percentages 0 and 100', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: 0 }).ok).toBe(true);
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: 100 }).ok).toBe(true);
+  });
+
+  it('accepts a decimal percentage', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentaje', valor: '12.5' }).data.valor).toBe(12.5);
+  });
+
+  it('rejects a percentage above 100', () => {
+    const r = validateMetaAhorro({ tipo: 'porcentaje', valor: 101 });
+    expect(r.ok).toBe(false);
+    expect(r.data).toBeUndefined();
+    expect(r.errors[0]).toContain('no puede superar 100');
+  });
+
+  it('rejects a negative goal', () => {
+    const r = validateMetaAhorro({ tipo: 'porcentaje', valor: -1 });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('mayor o igual a cero');
+  });
+
+  it('rejects a non-numeric goal', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: 'abc' });
+    expect(r.ok).toBe(false);
+    expect(r.data).toBeUndefined();
+  });
+
+  it('rejects a missing goal', () => {
+    expect(validateMetaAhorro(undefined).ok).toBe(false);
+    expect(validateMetaAhorro({}).ok).toBe(false);
+  });
+
+  it('rejects the ambiguous "250.000" format with a hint on how to write it', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: '250.000' });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('es ambigua');
+  });
+
+  it('falls back to porcentaje for an unknown tipo', () => {
+    expect(validateMetaAhorro({ tipo: 'porcentoje', valor: 30 }).data)
+      .toEqual({ tipo: 'porcentaje', valor: 30 });
+    expect(validateMetaAhorro({ valor: 30 }).data)
+      .toEqual({ tipo: 'porcentaje', valor: 30 });
+  });
+
+  it('rejects a monto above MAX_BUDGET_AMOUNT', () => {
+    const r = validateMetaAhorro({ tipo: 'monto', valor: MAX_BUDGET_AMOUNT + 1 });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('demasiado alta');
+  });
+
+  it('accepts exactly MAX_BUDGET_AMOUNT as a monto', () => {
+    expect(validateMetaAhorro({ tipo: 'monto', valor: MAX_BUDGET_AMOUNT }).ok).toBe(true);
+  });
+
+  it('does not apply the percentage cap to a monto', () => {
+    expect(validateMetaAhorro({ tipo: 'monto', valor: 500 }).ok).toBe(true);
+  });
+
+  it('accepts every declared tipo', () => {
+    for (const tipo of META_TIPOS) {
+      expect(validateMetaAhorro({ tipo, valor: 10 }).ok).toBe(true);
+    }
   });
 });
 

@@ -4,12 +4,13 @@
 // dashboard (balance, badges, gráficos, movimientos recientes).
 // ============================================================
 
-import { MESES, CUR_YEAR, ALL_CATS } from './constants.js';
+import { MESES, CUR_YEAR, ALL_CATS, DEFAULT_META_AHORRO } from './constants.js';
 import { 
   fmt, catInfo, gastosByMonth, totalIngresosMonth, 
-  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardBalanceAtEnd, html
+  totalCashGastosMonth, totalBudgetMonth, gastoByCat, getCardBalanceAtEnd, html, raw,
+  getComparativaBalance, deltasCategorias, getBalancesAnuales, progresoMetaAhorro
 } from './utils.js';
-import { buildMonthSelector, gastoItemHTML } from './ui.js';
+import { buildMonthSelector, gastoItemHTML, sparklineSVG } from './ui.js';
 
 /**
  * @param {object}   state
@@ -44,7 +45,10 @@ export function renderDashboard(state, onMonthChange, onEditGasto) {
   if (debtLabel) debtLabel.textContent = inCredit ? '💳 saldo a favor' : '💳 deuda';
 
   _renderBadges(cashGastos, ingresos, mi, state);
+  _renderBalanceDelta(mi, state);
+  _renderSparkline(mi, state);
   _renderBarChart(mi, state);
+  _renderMeta(mi, state);
   _renderBudgetVsReal(mi, state);
   _renderRecientes(mi, state, onEditGasto);
 }
@@ -92,15 +96,128 @@ function _renderBarChart(mi, state) {
     return;
   }
   const max = catTotals[0].total;
+  const deltas = deltasCategorias(state, mi);
   barEl.innerHTML = catTotals.map(c => html`
     <div class="bar-row">
       <div class="bar-label">${c.icon} ${c.label}</div>
       <div class="bar-track">
         <div class="bar-fill" style="width:${(c.total / max * 100).toFixed(1)}%;background:${c.color}"></div>
       </div>
-      <div class="bar-value">${fmt(c.total)}</div>
+      <div class="bar-value">${fmt(c.total)}${raw(_deltaCatHTML(deltas[c.key], c.key))}</div>
     </div>
   `).join('');
+}
+
+// Un salto de 100 a 5000 por ciento es real pero ilegible como "↑4900%": se
+// acota el número y el sentido lo lleva la flecha.
+const MAX_PCT = 999;
+
+/** Porcentaje de variación redondeado, acotado y sin signo (la flecha lo pone). */
+function _fmtPct(pct) {
+  const n = Math.round(Math.abs(pct));
+  return n > MAX_PCT ? `>${MAX_PCT}%` : `${n}%`;
+}
+
+// ── Comparativa contra el mes anterior ─────────────────────
+
+/**
+ * Delta del balance contra el mes anterior, debajo del monto.
+ * Enero y los meses cuyo anterior está vacío no muestran nada: sin base no hay
+ * comparación, y un "↑ ∞%" sería peor que no mostrar nada.
+ */
+function _renderBalanceDelta(mi, state) {
+  const el = document.getElementById('dash-balance-delta');
+  if (!el) return;
+
+  const c = getComparativaBalance(state, mi);
+  if (!c) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+
+  const mejora = c.diff > 0;
+  const igual  = c.diff === 0;
+  // Con el mes anterior en 0 el porcentaje no significa nada: se muestra la
+  // diferencia en pesos.
+  const magnitud = c.pct === null ? fmt(Math.abs(c.diff)) : _fmtPct(c.pct);
+
+  el.hidden = false;
+  el.className = 'balance-delta ' + (igual ? 'flat' : mejora ? 'good' : 'bad');
+  el.textContent = igual
+    ? '= igual que el mes anterior'
+    : `${mejora ? '↑' : '↓'} ${magnitud} vs mes anterior`;
+}
+
+// Gastar más es malo, pero para 'ahorro' es al revés (depositar más es bueno) y
+// el pago de tarjeta no es consumo: son deuda, así que no se juzga el signo.
+const CATS_SUBEN_BIEN = new Set(['ahorro']);
+const CATS_NEUTRALES  = new Set(['pay_card']);
+
+/** Delta de una categoría para anotar su barra. '' si no hay comparación. */
+function _deltaCatHTML(d, catKey) {
+  if (!d || d.previo === null || d.diff === 0) return '';
+
+  const sube  = d.diff > 0;
+  const texto = d.pct === null ? 'nuevo' : `${sube ? '↑' : '↓'}${_fmtPct(d.pct)}`;
+  const buena = CATS_SUBEN_BIEN.has(catKey) ? sube : !sube;
+  const cls   = CATS_NEUTRALES.has(catKey) ? 'flat' : buena ? 'good' : 'bad';
+  return html`<span class="bar-delta ${cls}">${texto}</span>`;
+}
+
+/** Sparkline con el balance de los 12 meses del año. */
+function _renderSparkline(mi, state) {
+  const el = document.getElementById('dash-spark');
+  if (!el) return;
+
+  el.innerHTML = sparklineSVG(getBalancesAnuales(state), {
+    activeIndex: mi,
+    label: `Balance mes a mes de ${CUR_YEAR}`,
+  });
+}
+
+// ── Meta de ahorro ─────────────────────────────────────────
+
+/**
+ * Barra de avance contra la meta del mes. Reutiliza .bvr-track / .bvr-real.{ok,
+ * warn, over} de "budget vs real": es la misma idea visual y evita una segunda
+ * barra con otro nombre.
+ */
+function _renderMeta(mi, state) {
+  const el = document.getElementById('dash-meta');
+  if (!el) return;
+
+  const { tipo, valor } = state.metaAhorro || DEFAULT_META_AHORRO;
+  const p = progresoMetaAhorro(state, mi);
+
+  // Sin meta, o con una meta en % y un mes sin ingresos, no hay nada que medir.
+  if (p.pct === null) {
+    const msg = valor > 0
+      ? 'Cargá ingresos este mes para calcular tu meta'
+      : 'Definí una meta de ahorro para ver tu avance';
+    el.innerHTML = html`
+      <div class="empty-state" style="padding:16px">
+        <div class="empty-icon">🎯</div>${msg}
+      </div>`;
+    return;
+  }
+
+  const barPct = Math.max(0, Math.min(100, p.pct));
+  const cls  = p.cumplida ? 'ok' : p.ahorro < 0 ? 'over' : 'warn';
+  const desc = tipo === 'porcentaje' ? `${valor}% de tus ingresos` : 'monto fijo';
+  const pie  = p.cumplida ? '¡Meta cumplida! 🎉' : `Te faltan ${fmt(p.faltante)}`;
+
+  el.innerHTML = html`
+    <div class="bvr-header">
+      <div class="bvr-name">${fmt(p.ahorro)} / ${fmt(p.meta)}</div>
+      <div class="bvr-vals">${Math.round(p.pct)}% · ${desc}</div>
+    </div>
+    <div class="bvr-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+         aria-valuenow="${Math.round(barPct)}" aria-label="Avance de la meta de ahorro">
+      <div class="bvr-budget" style="width:100%"></div>
+      <div class="bvr-real ${cls}" style="width:${barPct.toFixed(1)}%"></div>
+    </div>
+    <div class="meta-foot ${p.cumplida ? 'good' : ''}">${pie}</div>`;
 }
 
 function _renderBudgetVsReal(mi, state) {

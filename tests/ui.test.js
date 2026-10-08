@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   showToast, closeModals, buildMonthSelector, syncAllMonthSelectors, gastoItemHTML,
-  toastSinPersistencia,
+  toastSinPersistencia, sparklineSVG,
 } from '../ui.js';
 import { catInfo, fmt } from '../utils.js';
 import { MESES } from '../constants.js';
@@ -287,5 +287,124 @@ describe('gastoItemHTML', () => {
     const host = document.createElement('div');
     host.innerHTML = markup;
     expect(host.querySelector('.gasto-name').textContent).toBe('Compra &Lt;pan&Gt;');
+  });
+});
+
+describe('sparklineSVG', () => {
+  /** Devuelve el atributo `d` del path del SVG generado. */
+  const pathOf = (markup) => {
+    const host = document.createElement('div');
+    host.innerHTML = markup;
+    return host.querySelector('path').getAttribute('d');
+  };
+
+  /** Devuelve los puntos del path como [{ x, y }]. */
+  const coordsOf = (d) =>
+    d.split(/(?=[ML])/).filter(Boolean).map(p => {
+      const [x, y] = p.slice(1).trim().split(' ').map(Number);
+      return { x, y };
+    });
+
+  const circlesOf = (markup) => {
+    const host = document.createElement('div');
+    host.innerHTML = markup;
+    return [...host.querySelectorAll('circle')];
+  };
+
+  it('returns an empty string when there is nothing to draw', () => {
+    expect(sparklineSVG([])).toBe('');
+    expect(sparklineSVG([null, null, null])).toBe('');
+  });
+
+  it('renders an accessible svg with the given viewBox', () => {
+    const markup = sparklineSVG([1, 2, 3], { label: 'Balance del año' });
+    const host = document.createElement('div');
+    host.innerHTML = markup;
+
+    const svg = host.querySelector('svg.sparkline');
+    expect(svg.getAttribute('role')).toBe('img');
+    expect(svg.getAttribute('aria-label')).toBe('Balance del año');
+    expect(svg.getAttribute('viewBox')).toBe('0 0 120 32');
+  });
+
+  it('honours custom dimensions', () => {
+    expect(sparklineSVG([1, 2], { width: 60, height: 20 })).toContain('viewBox="0 0 60 20"');
+  });
+
+  it('draws a move plus one line per extra value', () => {
+    const d = pathOf(sparklineSVG([1, 2, 3]));
+    expect(d.match(/M/g)).toHaveLength(1);
+    expect(d.match(/L/g)).toHaveLength(2);
+  });
+
+  it('starts a new subpath on every gap instead of bridging it', () => {
+    const d = pathOf(sparklineSVG([1, null, 3]));
+    expect(d.match(/M/g)).toHaveLength(2);
+    expect(d).not.toContain('L');
+  });
+
+  it('keeps gaps as gaps in the middle of a run', () => {
+    const d = pathOf(sparklineSVG([1, 2, null, 4, 5]));
+    expect(d.match(/M/g)).toHaveLength(2);
+    expect(d.match(/L/g)).toHaveLength(2);
+  });
+
+  it('renders a flat line without NaN when every value is the same', () => {
+    const d = pathOf(sparklineSVG([7, 7, 7]));
+    expect(d).not.toContain('NaN');
+    // height/2 = 16: la línea queda centrada en lugar de dividir por cero.
+    expect(coordsOf(d).map(c => c.y)).toEqual([16, 16, 16]);
+  });
+
+  it('never emits NaN for a single value', () => {
+    expect(pathOf(sparklineSVG([null, 5, null]))).not.toContain('NaN');
+  });
+
+  it('scales negative and positive values around the middle', () => {
+    const coords = coordsOf(pathOf(sparklineSVG([-100, 100])));
+    // El mínimo queda abajo (y alto) y el máximo arriba (y bajo).
+    expect(coords[0].y).toBeGreaterThan(coords[1].y);
+  });
+
+  it('marks the active month with a bigger dot', () => {
+    const circles = circlesOf(sparklineSVG([1, 2, 3], { activeIndex: 1 }));
+    expect(circles).toHaveLength(1);
+    expect(circles[0].getAttribute('r')).toBe('2.5');
+    // viewBox de 120x32: el punto central queda en x = 60.
+    expect(circles[0].getAttribute('cx')).toBe('60.0');
+  });
+
+  it('omits the active dot when that month has no data', () => {
+    expect(circlesOf(sparklineSVG([1, 2, 3], { activeIndex: 5 }))).toHaveLength(0);
+    // Los dos meses con datos quedan como puntos sueltos, no como punto activo.
+    const circles = circlesOf(sparklineSVG([1, null, 3], { activeIndex: 1 }));
+    expect(circles).toHaveLength(2);
+    expect(circles.every(c => c.getAttribute('r') === '1.5')).toBe(true);
+  });
+
+  it('draws a small dot for a month isolated between gaps', () => {
+    const circles = circlesOf(sparklineSVG([null, 5, null]));
+    expect(circles).toHaveLength(1);
+    expect(circles[0].getAttribute('r')).toBe('1.5');
+  });
+
+  it('does not double the isolated dot when it is the active month', () => {
+    expect(circlesOf(sparklineSVG([null, 5, null], { activeIndex: 1 }))).toHaveLength(1);
+  });
+
+  it('draws no extra dot for a value that is part of a run', () => {
+    expect(circlesOf(sparklineSVG([null, 5, 6, null]))).toHaveLength(0);
+  });
+
+  it('inherits the colour from currentColor', () => {
+    const markup = sparklineSVG([1, 2], { activeIndex: 1 });
+    expect(markup).toContain('stroke="currentColor"');
+    expect(markup).toContain('fill="currentColor"');
+  });
+
+  it('escapes the aria-label so it cannot break out of the attribute', () => {
+    const markup = sparklineSVG([1, 2], { label: 'x" onload="alert(1)' });
+    expect(markup).toContain('&quot;');
+    expect(markup).not.toContain('onload="alert(1)"');
   });
 });

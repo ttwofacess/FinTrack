@@ -6,7 +6,7 @@
 
 import { CUR_YEAR } from './constants.js';
 import { showToast, toastSinPersistencia } from './ui.js';
-import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
+import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro } from './utils.js';
 import { normalizeState } from './store.js';
 
 /**
@@ -27,6 +27,11 @@ export function exportData(state) {
  * Returns { ok: boolean, errors: string[] }.
  */
 function validateImportedState(data) {
+  // La meta se captura antes de normalizeState, que muta `data` y reemplaza
+  // cualquier metaAhorro por el default: si se leyera después, una meta inválida
+  // del archivo pasaría el chequeo como si fuera válida.
+  const metaRaw = data.metaAhorro;
+
   const normalized = normalizeState(data);
   const errors = [];
 
@@ -75,6 +80,14 @@ function validateImportedState(data) {
     }
     // Igual que en gastos: escribir el budget saneado, no el crudo.
     normalized.budgets[mi] = { ...updates, ...r.data };
+  }
+
+  // Un export anterior a la meta no la trae y eso es válido: normalizeState ya
+  // dejó el default. Si viene, se valida y se escribe la versión saneada.
+  if (metaRaw !== undefined) {
+    const r = validateMetaAhorro(metaRaw);
+    if (!r.ok) errors.push(`Meta de ahorro inválida: ${r.errors[0]}`);
+    else normalized.metaAhorro = r.data;
   }
 
   return { ok: errors.length === 0, errors, data: normalized };

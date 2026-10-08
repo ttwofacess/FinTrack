@@ -46,6 +46,8 @@ export function mountDashboardDom() {
   document.body.innerHTML = `
     <div id="dash-months"></div>
     <div id="dash-balance"></div>
+    <div id="dash-balance-delta" hidden></div>
+    <div id="dash-spark"></div>
     <div id="dash-month-name"></div>
     <div id="dash-ingresos"></div>
     <div id="dash-gastos"></div>
@@ -53,6 +55,7 @@ export function mountDashboardDom() {
     <div class="bi-label" id="dash-debt-label">💳 deuda</div>
     <div id="dash-debt"></div>
     <div id="dash-badges"></div>
+    <div id="dash-meta"></div>
     <div id="dash-barchart"></div>
     <div id="dash-bvr"></div>
     <div id="dash-recientes"></div>

@@ -4,7 +4,8 @@
 // app en localStorage. No renderiza ni manipula el DOM.
 // ============================================================
 
-import { MESES, ALL_CATS } from './constants.js';
+import { MESES, ALL_CATS, DEFAULT_META_AHORRO } from './constants.js';
+import { validateMetaAhorro } from './utils.js';
 
 const STORAGE_KEY = 'fintrack_v2';
 const now = new Date();
@@ -15,7 +16,13 @@ export function defaultState() {
     budgets[i] = {};
     ALL_CATS.forEach(c => { budgets[i][c.key] = 0; });
   });
-  return { gastos: [], ingresos: [], budgets, selectedMonth: now.getMonth() };
+  return {
+    gastos: [],
+    ingresos: [],
+    budgets,
+    selectedMonth: now.getMonth(),
+    metaAhorro: { ...DEFAULT_META_AHORRO },
+  };
 }
 
 export function getState() {
@@ -50,6 +57,12 @@ export function normalizeState(s) {
       }
     });
   });
+
+  // 4. La meta de ahorro no existe en los estados guardados antes de esta
+  // feature: se completa con el default y una corrupta también cae al default,
+  // así un estado viejo o manipulado nunca deja la pantalla sin renderizar.
+  const meta = validateMetaAhorro(s.metaAhorro);
+  s.metaAhorro = meta.ok ? meta.data : { ...DEFAULT_META_AHORRO };
 
   return s;
 }

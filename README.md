@@ -8,6 +8,7 @@ FinTrack es una aplicación web ligera, moderna y **completamente gratuita** dis
 ## ✨ Características Principales
 
 - **Dashboard Inteligente**: Visualiza de un vistazo tu balance mensual, ingresos totales, gastos y cumplimiento de presupuesto.
+- **Comparativa Mensual y Meta de Ahorro**: Cada mes se compara con el anterior (el balance y el gasto por categoría muestran con flechas si subiste o bajaste) y podés definir una meta de ahorro —en % de ingresos o como monto fijo— con su barra de progreso.
 - **Gestión de Gastos**: Clasifica tus salidas en categorías fijas (Vivienda, Servicios, Ahorro, etc.) y variables (Alimentación, Salidas, Ropa, etc.).
 - **Control de Presupuesto (Budget vs Real)**: Define límites mensuales por categoría y monitorea cuánto has ejecutado en tiempo real con alertas visuales.
 - **Seguimiento de Ingresos**: Registra tus fuentes de ingresos (Sueldo, Freelance, Inversiones) y visualiza proyecciones anuales.

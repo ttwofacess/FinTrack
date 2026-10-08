@@ -20,19 +20,37 @@
   background: radial-gradient(circle, rgba(109,250,208,0.1) 0%, transparent 70%);
   border-radius: 50%;
 }
+/* Los ::before/::after son decorativos y están posicionados: sin esto se
+   pintarían encima del texto del hero. */
+.balance-hero > * { position: relative; z-index: 1; }
 .balance-label { font-size: 0.72rem; color: var(--text2); font-family: var(--mono); letter-spacing: 1px; text-transform: uppercase; }
+/* flex-wrap + min-width:0 en la columna de las cifras: un balance de 7 u 8
+   cifras no tiene dónde partirse (los separadores de miles no son espacios), así
+   que sin esto empujaba al delta y al sparkline fuera del hero —que tiene
+   overflow:hidden, o sea que los recortaba. Al no entrar, el sparkline baja a
+   una línea propia en vez de desbordar. */
+.balance-main { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.balance-figures { min-width: 0; }
 .balance-amount {
-  font-size: 2.4rem; font-weight: 800; letter-spacing: -1.5px;
+  font-size: clamp(1.7rem, 8vw, 2.4rem); font-weight: 800; letter-spacing: -1.5px;
   margin: 6px 0 4px; line-height: 1;
 }
 .balance-amount.positive { color: var(--accent3); }
 .balance-amount.negative { color: var(--accent2); }
+.balance-delta { font-size: 0.72rem; font-family: var(--mono); margin-bottom: 4px; }
+.balance-spark { width: 120px; height: 32px; flex-shrink: 0; margin-left: auto; color: var(--accent3); }
+.balance-spark .sparkline { width: 100%; height: 100%; display: block; }
 .balance-month { font-size: 0.75rem; color: var(--text2); font-family: var(--mono); }
 .balance-row { display: flex; gap: 16px; margin-top: 20px; }
 .balance-item { flex: 1; }
 @media (max-width: 460px) {
   .balance-row { flex-wrap: wrap; }
   .balance-item { flex: 0 0 calc(50% - 8px); }
+}
+/* En pantallas angostas el monto largo y el sparkline no entran juntos: se
+   achica el gráfico antes que dejar el saldo partido en dos líneas. */
+@media (max-width: 380px) {
+  .balance-spark { width: 90px; }
 }
 .balance-item .bi-label { font-size: 0.65rem; color: var(--text2); font-family: var(--mono); letter-spacing: 0.5px; }
 .balance-item .bi-value { font-size: 1.05rem; font-weight: 700; margin-top: 3px; }

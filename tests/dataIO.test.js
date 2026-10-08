@@ -158,6 +158,78 @@ describe('importData', () => {
     expect(data.gastos[0].medio).toBe('debito');
   });
 
+  it('accepts a state exported before the savings goal existed', async () => {
+    const state = defaultState();
+    delete state.metaAhorro;
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.metaAhorro).toEqual({ tipo: 'porcentaje', valor: 0 });
+  });
+
+  it('keeps a valid metaAhorro on import', async () => {
+    const state = defaultState();
+    state.metaAhorro = { tipo: 'porcentaje', valor: 20 };
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.metaAhorro).toEqual({ tipo: 'porcentaje', valor: 20 });
+  });
+
+  it('normalises a string valor in metaAhorro so the goal is calculable', async () => {
+    const state = defaultState();
+    state.metaAhorro = { tipo: 'monto', valor: '250000' };
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.metaAhorro).toEqual({ tipo: 'monto', valor: 250000 });
+  });
+
+  it('rejects a metaAhorro with an out-of-range percentage', async () => {
+    const state = defaultState();
+    state.metaAhorro = { tipo: 'porcentaje', valor: 500 };
+
+    const { called } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(false);
+    expect(toastText()).toContain('Meta de ahorro inválida');
+  });
+
+  it('rejects a metaAhorro with a negative value', async () => {
+    const state = defaultState();
+    state.metaAhorro = { tipo: 'monto', valor: -1 };
+
+    const { called } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(false);
+    expect(toastText()).toContain('mayor o igual a cero');
+  });
+
+  it('rejects a metaAhorro whose value is not a number', async () => {
+    const state = defaultState();
+    state.metaAhorro = { tipo: 'porcentaje', valor: 'mucho' };
+
+    const { called } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(false);
+    expect(toastText()).toContain('Meta de ahorro inválida');
+  });
+
+  it('round-trips metaAhorro through export and import', async () => {
+    const state = defaultState();
+    state.metaAhorro = { tipo: 'monto', valor: 300000 };
+
+    const { data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(data.metaAhorro).toEqual({ tipo: 'monto', valor: 300000 });
+  });
+
+  it('logs the meta error among all validation errors', async () => {
+    const state = defaultState();
+    state.gastos.push({ id: '1', detalle: '', importe: 1, mes: 0, categoria: 'salidas', medio: 'efectivo' });
+    state.metaAhorro = { tipo: 'porcentaje', valor: 500 };
+
+    await runImport(jsonFile(JSON.stringify(state)));
+    const logged = console.warn.mock.calls.at(-1)[1];
+    expect(logged.some(e => e.includes('Meta de ahorro inválida'))).toBe(true);
+  });
+
   it('warns instead of confirming when the import could not be persisted', async () => {
     const onSuccess = vi.fn(() => false);
     importData(jsonFile(JSON.stringify(defaultState())), onSuccess);

@@ -41,7 +41,13 @@
 
     <div class="balance-hero">
       <div class="balance-label">balance del mes</div>
-      <div class="balance-amount" id="dash-balance">$0</div>
+      <div class="balance-main">
+        <div class="balance-figures">
+          <div class="balance-amount" id="dash-balance">$0</div>
+          <div class="balance-delta" id="dash-balance-delta" hidden></div>
+        </div>
+        <div class="balance-spark" id="dash-spark"></div>
+      </div>
       <div class="balance-month" id="dash-month-name"></div>
       <div class="balance-row">
         <div class="balance-item">
@@ -64,6 +70,14 @@
     </div>
 
     <div class="summary-badges" id="dash-badges"></div>
+
+    <div class="card" id="dash-meta-card">
+      <div class="card-head">
+        <div class="card-title">🎯 meta de ahorro</div>
+        <button class="pill" id="btn-edit-meta" type="button">editar</button>
+      </div>
+      <div id="dash-meta"></div>
+    </div>
 
     <div class="card">
       <div class="card-title">gastos por categoría</div>
@@ -294,6 +308,28 @@
           <button class="copy-button" type="button">Copiar</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL META DE AHORRO -->
+  <div class="modal-overlay" id="modal-meta" role="dialog" aria-modal="true" aria-labelledby="meta-title">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="meta-title">Meta de ahorro</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="fm-tipo">Tipo</label>
+          <select class="form-select" id="fm-tipo">
+            <option value="porcentaje">% de ingresos</option>
+            <option value="monto">Monto fijo ($)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="fm-valor" id="fm-valor-label">Porcentaje (%)</label>
+          <input class="form-input" id="fm-valor" type="number" min="0" step="any" inputmode="decimal" placeholder="0">
+        </div>
+      </div>
+      <button class="btn-primary" id="btn-save-meta">Guardar meta</button>
     </div>
   </div>
 

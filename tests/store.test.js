@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { defaultState, getState, setState, normalizeState } from '../store.js';
-import { ALL_CATS, MESES } from '../constants.js';
+import { ALL_CATS, MESES, DEFAULT_META_AHORRO } from '../constants.js';
 
 const STORAGE_KEY = 'fintrack_v2';
 
@@ -37,13 +37,22 @@ describe('defaultState', () => {
     expect(defaultState().selectedMonth).toBe(new Date().getMonth());
   });
 
+  it('starts with no savings goal', () => {
+    expect(defaultState().metaAhorro).toEqual({ tipo: 'porcentaje', valor: 0 });
+    expect(DEFAULT_META_AHORRO).toEqual({ tipo: 'porcentaje', valor: 0 });
+  });
+
   it('returns a fresh object each call (no shared reference)', () => {
     const a = defaultState();
     const b = defaultState();
     a.gastos.push({ id: 'x' });
     a.budgets[0].vivienda = 999;
+    a.metaAhorro.valor = 50;
     expect(b.gastos).toEqual([]);
     expect(b.budgets[0].vivienda).toBe(0);
+    expect(b.metaAhorro.valor).toBe(0);
+    // Tampoco se comparte la referencia con la constante de defaults.
+    expect(DEFAULT_META_AHORRO.valor).toBe(0);
   });
 });
 
@@ -113,6 +122,42 @@ describe('normalizeState', () => {
     const once = normalizeState({ gastos: [{ id: '1', medio: 'débito' }] });
     const twice = normalizeState(JSON.parse(JSON.stringify(once)));
     expect(twice).toEqual(once);
+  });
+
+  it('adds a default metaAhorro to a state saved before the feature', () => {
+    const s = normalizeState({ gastos: [], ingresos: [], budgets: {} });
+    expect(s.metaAhorro).toEqual({ tipo: 'porcentaje', valor: 0 });
+  });
+
+  it('preserves a valid metaAhorro', () => {
+    const s = normalizeState({ metaAhorro: { tipo: 'monto', valor: 250000 } });
+    expect(s.metaAhorro).toEqual({ tipo: 'monto', valor: 250000 });
+  });
+
+  it('coerces a string valor to a number', () => {
+    const s = normalizeState({ metaAhorro: { tipo: 'porcentaje', valor: '20' } });
+    expect(s.metaAhorro).toEqual({ tipo: 'porcentaje', valor: 20 });
+  });
+
+  it('replaces an invalid metaAhorro with the default', () => {
+    expect(normalizeState({ metaAhorro: { tipo: 'x', valor: -5 } }).metaAhorro)
+      .toEqual({ tipo: 'porcentaje', valor: 0 });
+    expect(normalizeState({ metaAhorro: { tipo: 'porcentaje', valor: 500 } }).metaAhorro)
+      .toEqual({ tipo: 'porcentaje', valor: 0 });
+    expect(normalizeState({ metaAhorro: { tipo: 'porcentaje', valor: 'abc' } }).metaAhorro)
+      .toEqual({ tipo: 'porcentaje', valor: 0 });
+  });
+
+  it('normalises an unknown tipo to porcentaje while keeping a sane valor', () => {
+    expect(normalizeState({ metaAhorro: { tipo: 'porcentoje', valor: 30 } }).metaAhorro)
+      .toEqual({ tipo: 'porcentaje', valor: 30 });
+  });
+
+  it('replaces the default object without sharing the reference', () => {
+    const s = normalizeState({ metaAhorro: { tipo: 'x', valor: -5 } });
+    s.metaAhorro.valor = 80;
+    expect(DEFAULT_META_AHORRO.valor).toBe(0);
+    expect(normalizeState({}).metaAhorro.valor).toBe(0);
   });
 });
 

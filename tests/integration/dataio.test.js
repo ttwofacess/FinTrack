@@ -157,6 +157,42 @@ describe('importación', () => {
     expect(getStoredState().budgets[0].vivienda).toBe(1000000);
   });
 
+  it('importa un export viejo sin metaAhorro y deja el default', async () => {
+    await bootApp();
+    const estado = estadoPropio();
+    delete estado.metaAhorro;
+
+    pickFile(jsonFile(JSON.stringify(estado)));
+    await waitForToast('Datos importados');
+
+    expect(getStoredState().gastos).toHaveLength(1);
+    expect(getStoredState().metaAhorro).toEqual({ tipo: 'porcentaje', valor: 0 });
+  });
+
+  it('conserva una metaAhorro válida al importar', async () => {
+    await bootApp();
+    const estado = estadoPropio();
+    estado.metaAhorro = { tipo: 'monto', valor: 300000 };
+
+    pickFile(jsonFile(JSON.stringify(estado)));
+    await waitForToast('Datos importados');
+
+    expect(getStoredState().metaAhorro).toEqual({ tipo: 'monto', valor: 300000 });
+  });
+
+  it('rechaza una metaAhorro inválida sin tocar el estado', async () => {
+    await bootApp(estadoPropio());
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const estado = estadoPropio();
+    estado.metaAhorro = { tipo: 'porcentaje', valor: 500 };
+
+    pickFile(jsonFile(JSON.stringify(estado)));
+    await waitForToast('Meta de ahorro inválida');
+
+    expect(getStoredState().gastos[0].detalle).toBe('Alquiler importado');
+    expect(getStoredState().metaAhorro).toEqual({ tipo: 'porcentaje', valor: 0 });
+  });
+
   it('el botón importar abre el selector de archivos', async () => {
     await bootApp();
     const click = vi.spyOn(byId('input-import'), 'click').mockImplementation(() => {});
@@ -195,5 +231,26 @@ describe('ida y vuelta exportar → importar', () => {
 
     expect($$('#dash-recientes .gasto-name').map(n => n.textContent)).toEqual(['Supermercado']);
     expect(getStoredState().gastos[0]).toMatchObject({ detalle: 'Supermercado', importe: 25000 });
+  });
+
+  it('la meta de ahorro sobrevive al round-trip exportar → importar', async () => {
+    await bootApp(stateWith(s => {
+      s.metaAhorro = { tipo: 'porcentaje', valor: 25 };
+      s.selectedMonth = 0;
+    }));
+
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    byId('btn-export').click();
+    const exportado = JSON.parse(await readBlob(URL.createObjectURL.mock.calls[0][0]));
+    click.mockRestore();
+    expect(exportado.metaAhorro).toEqual({ tipo: 'porcentaje', valor: 25 });
+
+    byId('btn-reset-data').click();
+    expect(getStoredState().metaAhorro).toEqual({ tipo: 'porcentaje', valor: 0 });
+
+    pickFile(jsonFile(JSON.stringify(exportado)));
+    await waitForToast('Datos importados');
+
+    expect(getStoredState().metaAhorro).toEqual({ tipo: 'porcentaje', valor: 25 });
   });
 });
