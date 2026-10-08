@@ -9,11 +9,11 @@ import { getState, setState, defaultState } from './store.js';
 import { closeModals, showToast, syncAllMonthSelectors, toastSinPersistencia } from './ui.js';
 import { renderDashboard }                  from './dashboard.js';
 import { renderGastos, initGastoModal, initGastosControls, openNewGasto, openEditGasto } from './gastos.js';
-import { renderPresupuesto, initPresupuestoEvents } from './presupuesto.js';
+import { renderPresupuesto, initPresupuestoEvents, initMetaModal } from './presupuesto.js';
 import { renderIngresos, initIngresoModal, initIngresosControls } from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
 import { initDonateModal }                           from './donate.js';
-import { validateGasto, validateIngreso, validateBudgetUpdate } from './utils.js';
+import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro } from './utils.js';
 
 // ── Estado global ──────────────────────────────────────────
 let STATE = getState();
@@ -197,6 +197,19 @@ function onBudgetSave(mi, updates) {
   return persisted;
 }
 
+// ── Callbacks de meta de ahorro ───────────────────────────
+function onMetaSave(meta) {
+  const result = validateMetaAhorro(meta);
+  if (!result.ok) {
+    console.warn('[onMetaSave] Meta inválida rechazada:', result.errors, meta);
+    return;
+  }
+  STATE.metaAhorro = result.data;
+  const persisted = saveS();
+  renderDashboardActual();
+  return persisted;
+}
+
 // ── Import / export / reset ──────────────────────────────
 initDataIO(getS, (importedState) => {
   STATE = importedState;
@@ -240,6 +253,7 @@ initGastosControls(getS, onGastoSave, onGastoDelete);
 initIngresoModal(getS, onIngresoSave);
 initIngresosControls(getS);
 initPresupuestoEvents(getS, onMonthChange, onBudgetSave);
+initMetaModal(getS, onMetaSave);
 initDonateModal();
 initInstallButton();
 
