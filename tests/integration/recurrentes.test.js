@@ -188,6 +188,37 @@ describe('importe base y salteos', () => {
   });
 });
 
+describe('el modal de recurrente', () => {
+  const abrirModal = () => byId('modal-recurrente').classList.add('open');
+
+  it('se cierra con Escape', async () => {
+    await bootApp();
+    abrirModal();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(byId('modal-recurrente').classList.contains('open')).toBe(false);
+  });
+
+  it('se cierra con el click en el overlay', async () => {
+    await bootApp();
+    abrirModal();
+
+    byId('modal-recurrente').click();
+
+    expect(byId('modal-recurrente').classList.contains('open')).toBe(false);
+  });
+
+  it('tiene todos los campos que necesita el formulario', async () => {
+    await bootApp();
+
+    for (const id of ['r-detalle', 'r-importe', 'r-desde', 'r-categoria', 'r-medio',
+      'r-aplicar-mes', 'btn-save-recurrente', 'btn-delete-recurrente']) {
+      expect(byId(id), id).not.toBeNull();
+    }
+  });
+});
+
 describe('persistencia', () => {
   it('conserva los recurrentes y los gastos generados al reiniciar', async () => {
     await bootApp(conRecurrente());
