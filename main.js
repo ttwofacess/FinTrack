@@ -13,7 +13,8 @@ import { renderPresupuesto, initPresupuestoEvents, initMetaModal } from './presu
 import { renderIngresos, initIngresoModal, initIngresosControls } from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
 import { initDonateModal }                           from './donate.js';
-import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro } from './utils.js';
+import { ensureMonthRecurrentes, sincronizarImporteBase, registrarSalteo } from './recurrentes.js';
+import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro, validateRecurrente, uid } from './utils.js';
 
 // ── Estado global ──────────────────────────────────────────
 let STATE = getState();
@@ -92,6 +93,24 @@ window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
 });
 
+// ── Recurrentes ───────────────────────────────────────────
+//
+// Los gastos recurrentes se crean solos al entrar a un mes, así que el disparo
+// va dentro de navigate(): es el único camino por el que la app cambia de mes o
+// de pantalla, y ya lo usan el arranque, onMonthChange, el import y el reset.
+// La función es idempotente, así que llamarla de más no genera duplicados.
+function aplicarRecurrentes() {
+  const creados = ensureMonthRecurrentes(STATE, STATE.selectedMonth);
+  if (creados === 0) return 0;
+
+  if (!saveS()) toastSinPersistencia('Gastos recurrentes');
+  else {
+    const plural = creados > 1;
+    showToast(`↻ ${creados} gasto${plural ? 's' : ''} recurrente${plural ? 's' : ''} cargado${plural ? 's' : ''}`);
+  }
+  return creados;
+}
+
 // ── Navegación ────────────────────────────────────────────
 //
 // El dashboard muestra datos de todas las colecciones, así que cualquier
@@ -108,6 +127,10 @@ function navigate(screenId) {
   document.getElementById('screen-' + screenId).classList.add('active');
   document.querySelector(`.nav-item[data-screen="${screenId}"]`).classList.add('active');
   document.getElementById('fab').style.display = screenId === 'gastos' ? 'flex' : 'none';
+
+  // Antes de los renders: el gasto del mes tiene que existir para que el
+  // dashboard y la lista sumen el dato nuevo.
+  aplicarRecurrentes();
 
   if (screenId === 'dashboard')   renderDashboardActual();
   if (screenId === 'gastos')      renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
@@ -141,24 +164,44 @@ function onGastoSave(gasto) {
     return;
   }
   const clean = { ...result.data, id, _edit };
+  let guardado = null;
 
   if (clean._edit) {
     const idx = STATE.gastos.findIndex(g => g.id === clean.id);
     if (idx >= 0) {
       const { _edit: _, ...toSave } = clean;
       STATE.gastos[idx] = { ...STATE.gastos[idx], ...toSave };
+      guardado = STATE.gastos[idx];
     }
   } else {
     const { _edit: _, ...toSave } = clean;
     STATE.gastos.push(toSave);
   }
+
+  // Editar el gasto de un recurrente actualiza el importe base, pero sólo si es
+  // el mes más reciente: corregir marzo no debe cambiar lo que se cobra en
+  // octubre.
+  const recurrente = guardado ? sincronizarImporteBase(STATE, guardado) : null;
   const persisted = saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
   renderDashboardActual();
+
+  // El modal de gasto muestra su propio toast apenas onGastoSave devuelve y
+  // showToast reemplaza el contenido, así que el aviso de la base espera un
+  // microtask para quedar en pantalla. Si no persistió, manda el aviso de que
+  // los datos no se guardaron.
+  if (recurrente && persisted) {
+    queueMicrotask(() => showToast(`↻ Importe base de ${recurrente.detalle} actualizado`));
+  }
   return persisted;
 }
 
 function onGastoDelete(id) {
+  // Antes de filtrar: hace falta el gasto para saber si era autogenerado y, si
+  // lo era, evitar que se vuelva a crear al volver a entrar al mes.
+  const borrado = STATE.gastos.find(g => g.id === id);
+  if (borrado) registrarSalteo(STATE, borrado);
+
   STATE.gastos = STATE.gastos.filter(g => g.id !== id);
   const persisted = saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
@@ -206,6 +249,84 @@ function onMetaSave(meta) {
   }
   STATE.metaAhorro = result.data;
   const persisted = saveS();
+  renderDashboardActual();
+  return persisted;
+}
+
+// ── Callbacks de recurrentes ──────────────────────────────
+//
+// Mismo contrato que el resto: revalidan, guardan, re-renderizan y devuelven
+// `persisted` para que el llamador pueda avisar si localStorage falló.
+
+function renderPresupuestoActual() {
+  renderPresupuesto(STATE, onMonthChange, onBudgetSave);
+}
+
+/**
+ * @param {object} rec — { detalle, importe, categoria, medio, desdeMes, activo,
+ *   id?, _edit?, _aplicarMes? }
+ */
+function onRecurrenteSave(rec) {
+  const { _edit, id, _aplicarMes, ...fields } = rec;
+  const existente = STATE.recurrentes.find(r => r.id === id);
+
+  // Se valida sobre el existente porque validateRecurrente devuelve la forma
+  // completa: los `salteados` acumulados no vienen del formulario y sin esto se
+  // perderían en cada edición.
+  const result = validateRecurrente({ ...existente, ...fields });
+  if (!result.ok) {
+    console.warn('[onRecurrenteSave] Recurrente inválido rechazado:', result.errors, rec);
+    return;
+  }
+
+  const limpio = { ...existente, ...result.data, id: id || uid() };
+
+  if (_edit) {
+    const idx = STATE.recurrentes.findIndex(r => r.id === limpio.id);
+    if (idx < 0) return;
+    STATE.recurrentes[idx] = limpio;
+  } else {
+    STATE.recurrentes.push(limpio);
+  }
+
+  // Los meses ya generados no se modifican retroactivamente al cambiar la base,
+  // salvo que el usuario marque explícitamente el checkbox del modal.
+  if (_aplicarMes) {
+    const delMes = STATE.gastos.find(g => g.recurrenteId === limpio.id && g.mes === STATE.selectedMonth);
+    if (delMes) delMes.importe = limpio.importe;
+  }
+
+  const persisted = saveS();
+
+  // Crear uno nuevo o reactivar uno pausado carga el mes actual en el momento.
+  if (!existente || !existente.activo) aplicarRecurrentes();
+
+  renderPresupuestoActual();
+  renderDashboardActual();
+  return persisted;
+}
+
+/** Pausa o reactiva un recurrente desde el switch de la lista. */
+function onRecurrenteToggle(id) {
+  const r = STATE.recurrentes.find(x => x.id === id);
+  if (!r) return;
+
+  r.activo = !r.activo;
+  const persisted = saveS();
+
+  if (r.activo) aplicarRecurrentes();
+  renderPresupuestoActual();
+  return persisted;
+}
+
+/**
+ * Borra un recurrente. Los gastos que ya generó se quedan: son historial, y el
+ * `recurrenteId` que quedó huérfano lo toleran los helpers.
+ */
+function onRecurrenteDelete(id) {
+  STATE.recurrentes = STATE.recurrentes.filter(r => r.id !== id);
+  const persisted = saveS();
+  renderPresupuestoActual();
   renderDashboardActual();
   return persisted;
 }
