@@ -188,6 +188,25 @@ export function submitIngreso({ descripcion, importe, mes, tipo }) {
 export const openGastoFromList = (index = 0) =>
   byId('gastos-list').querySelectorAll('.gasto-item')[index].click();
 
+/** Abre el modal de recurrente en edición sobre la fila con ese detalle. */
+export const abrirRecurrente = (detalle) =>
+  $$('#presup-content .recurrente-item')
+    .find(el => el.querySelector('.presup-name').textContent === detalle)
+    .click();
+
+/** Rellena el modal de recurrente y lo guarda. */
+export function submitRecurrente({ detalle, importe, categoria, medio, desde }) {
+  if (detalle !== undefined) byId('r-detalle').value = detalle;
+  if (importe !== undefined) byId('r-importe').value = importe;
+  if (categoria !== undefined) byId('r-categoria').value = categoria;
+  if (medio !== undefined) byId('r-medio').value = medio;
+  if (desde !== undefined) byId('r-desde').value = String(desde);
+  byId('btn-save-recurrente').click();
+}
+
+/** Clic en la pestaña del tab indicado de Presupuesto. */
+export const tab = (name) => $(`.tab-btn[data-tab="${name}"]`).click();
+
 /** Lee un Blob como texto (jsdom no implementa Blob.text()). */
 export const readBlob = (blob) => new Promise((resolve, reject) => {
   const reader = new FileReader();

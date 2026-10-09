@@ -7,13 +7,15 @@
 
 import { getState, setState, defaultState } from './store.js';
 import { closeModals, showToast, syncAllMonthSelectors, toastSinPersistencia } from './ui.js';
+import { MESES } from './constants.js';
 import { renderDashboard }                  from './dashboard.js';
 import { renderGastos, initGastoModal, initGastosControls, openNewGasto, openEditGasto } from './gastos.js';
 import { renderPresupuesto, initPresupuestoEvents, initMetaModal } from './presupuesto.js';
 import { renderIngresos, initIngresoModal, initIngresosControls } from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
 import { initDonateModal }                           from './donate.js';
-import { ensureMonthRecurrentes, sincronizarImporteBase, registrarSalteo } from './recurrentes.js';
+import { ensureMonthRecurrentes, sincronizarImporteBase, registrarSalteo,
+         initRecurrentesModal, initRecurrentesEvents } from './recurrentes.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro, validateRecurrente, uid } from './utils.js';
 
 // ── Estado global ──────────────────────────────────────────
@@ -134,7 +136,7 @@ function navigate(screenId) {
 
   if (screenId === 'dashboard')   renderDashboardActual();
   if (screenId === 'gastos')      renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
-  if (screenId === 'presupuesto') renderPresupuesto(STATE, onMonthChange, onBudgetSave);
+  if (screenId === 'presupuesto') renderPresupuesto(STATE, onMonthChange, onBudgetSave, onRecurrenteToggle);
   if (screenId === 'ingresos')    renderIngresos(STATE, onMonthChange);
 }
 
@@ -235,7 +237,7 @@ function onBudgetSave(mi, updates) {
   if (!STATE.budgets[mi]) STATE.budgets[mi] = {};
   Object.assign(STATE.budgets[mi], result.data);
   const persisted = saveS();
-  renderPresupuesto(STATE, onMonthChange, onBudgetSave);
+  renderPresupuestoActual();
   renderDashboardActual();
   return persisted;
 }
@@ -259,7 +261,7 @@ function onMetaSave(meta) {
 // `persisted` para que el llamador pueda avisar si localStorage falló.
 
 function renderPresupuestoActual() {
-  renderPresupuesto(STATE, onMonthChange, onBudgetSave);
+  renderPresupuesto(STATE, onMonthChange, onBudgetSave, onRecurrenteToggle);
 }
 
 /**
@@ -299,10 +301,17 @@ function onRecurrenteSave(rec) {
   const persisted = saveS();
 
   // Crear uno nuevo o reactivar uno pausado carga el mes actual en el momento.
-  if (!existente || !existente.activo) aplicarRecurrentes();
+  const generados = (!existente || !existente.activo) ? aplicarRecurrentes() : 0;
 
   renderPresupuestoActual();
   renderDashboardActual();
+
+  // El modal muestra su propio toast apenas onRecurrenteSave devuelve y
+  // showToast reemplaza el contenido: si se generó algo, el aviso se arma acá y
+  // espera un microtask, para que el usuario lea las dos cosas juntas.
+  if (generados > 0 && persisted) {
+    queueMicrotask(() => showToast(`✓ Recurrente guardado · ${MESES[STATE.selectedMonth]} actualizado`));
+  }
   return persisted;
 }
 
@@ -373,7 +382,9 @@ initGastoModal(getS, onGastoSave, onGastoDelete);
 initGastosControls(getS, onGastoSave, onGastoDelete);
 initIngresoModal(getS, onIngresoSave);
 initIngresosControls(getS);
-initPresupuestoEvents(getS, onMonthChange, onBudgetSave);
+initPresupuestoEvents(getS, onMonthChange, onBudgetSave, onRecurrenteToggle);
+initRecurrentesEvents(getS);
+initRecurrentesModal(getS, onRecurrenteSave, onRecurrenteDelete);
 initMetaModal(getS, onMetaSave);
 initDonateModal();
 initInstallButton();

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   bootApp, restartApp, stubBrowserApis, restoreBrowserApis,
-  $$, byId, navTo, toastText, clearToast, getStoredState, stateWith,
-  submitGasto, openGastoFromList,
+  $, $$, byId, navTo, clickMonth, toastText, clearToast, getStoredState, stateWith,
+  submitGasto, openGastoFromList, abrirRecurrente, submitRecurrente, tab,
 } from '../helpers/app.js';
 
 beforeEach(stubBrowserApis);
@@ -248,3 +248,273 @@ describe('persistencia', () => {
     vi.restoreAllMocks();
   });
 });
+// ── Pestaña Recurrentes ────────────────────────────────────
+//
+// Estos tests sí dependen de la fecha, así que la fijan: main.js decide hasta
+// qué mes autogenera con `new Date().getMonth()`, y sin un "hoy" estable el
+// resultado dependería de cuándo se corra la suite. Sólo se foca Date, no los
+// timers: el harness de arranque usa setTimeout para esperar.
+const OCTUBRE_FIJO = new Date(2026, 9, 15);
+
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(OCTUBRE_FIJO); });
+afterEach(() => vi.useRealTimers());
+
+const filaPorNombre = (nombre) =>
+  $$('#presup-content .recurrente-item').find(el => el.querySelector('.presup-name').textContent === nombre);
+
+const abrirPestana = () => { navTo('presupuesto'); tab('recurrentes'); };
+
+const crearRecurrente = (over = {}) => {
+  byId('btn-new-recurrente').click();
+  submitRecurrente({ detalle: 'Netflix', importe: 8500, categoria: 'suscripciones', medio: 'credito', ...over });
+};
+
+describe('la pestaña Recurrentes', () => {
+  it('es la cuarta pestaña y muestra el botón de nuevo sólo ahí', async () => {
+    await bootApp();
+    expect($$('.tab-btn')).toHaveLength(4);
+    expect(byId('btn-new-recurrente').hidden).toBe(true);
+    expect(byId('btn-edit-presup').hidden).toBe(false);
+
+    tab('recurrentes');
+
+    expect(byId('btn-new-recurrente').hidden).toBe(false);
+    // Sin budgets que editar en esta pestaña.
+    expect(byId('btn-edit-presup').hidden).toBe(true);
+  });
+
+  it('lista los recurrentes con su importe base y el resumen del mes', async () => {
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [
+        recurrente(),
+        recurrente({ id: 'r2', detalle: 'Alquiler', importe: 250000, categoria: 'vivienda', activo: false }),
+      ];
+    }));
+    abrirPestana();
+
+    expect(filaPorNombre('Netflix').textContent).toContain('$8.500');
+    expect(filaPorNombre('Netflix').textContent).toContain('desde Enero');
+    expect(filaPorNombre('Alquiler').className).toContain('recurrente-pausado');
+    expect($('#presup-content .recurrentes-total').textContent).toContain('$8.500');
+    expect($('#presup-content .recurrentes-sub').textContent).toContain('1 activo de 2');
+  });
+
+  it('muestra un estado vacío cuando no hay recurrentes', async () => {
+    await bootApp();
+    abrirPestana();
+
+    expect($('#presup-content').textContent).toContain('Sin recurrentes');
+  });
+
+  it('escapa el detalle en la lista', async () => {
+    await bootApp(conRecurrente(recurrente({ detalle: '<img src=x onerror=alert(1)>' })));
+    abrirPestana();
+
+    expect(filaPorNombre('<img src=x onerror=alert(1)>')).toBeTruthy();
+    expect($('#presup-content img')).toBeNull();
+  });
+
+  it('no abre el modal al tocar el switch', async () => {
+    await bootApp(conRecurrente());
+    abrirPestana();
+
+    filaPorNombre('Netflix').querySelector('.switch').click();
+
+    expect(byId('modal-recurrente').classList.contains('open')).toBe(false);
+  });
+});
+
+describe('alta y edición desde la UI', () => {
+  it('crea un recurrente, lo lista y carga el gasto del mes actual', async () => {
+    await bootApp();
+    abrirPestana();
+
+    crearRecurrente();
+    await Promise.resolve();   // el toast combinado se emite en un microtask
+
+    expect(getStoredState().recurrentes).toHaveLength(1);
+    expect(getStoredState().gastos).toHaveLength(1);
+    expect(getStoredState().gastos[0]).toMatchObject({ detalle: 'Netflix', importe: 8500, mes: 0, recurrenteId: getStoredState().recurrentes[0].id });
+    expect(filaPorNombre('Netflix')).toBeTruthy();
+    expect(toastText()).toContain('Recurrente guardado');
+  });
+
+  it('rechaza un recurrente inválido y deja el modal abierto', async () => {
+    await bootApp();
+    abrirPestana();
+    byId('btn-new-recurrente').click();
+
+    submitRecurrente({ detalle: '', importe: 0 });
+
+    expect(getStoredState().recurrentes).toHaveLength(0);
+    expect(toastText()).toContain('El detalle no puede estar vacío.');
+    expect(byId('modal-recurrente').classList.contains('open')).toBe(true);
+  });
+
+  it('precarga el modal al tocar la fila y guarda los cambios', async () => {
+    await bootApp(conRecurrente());
+    abrirPestana();
+
+    filaPorNombre('Netflix').click();
+    expect(byId('recurrente-title').textContent).toBe('Editar Recurrente');
+    expect(byId('r-detalle').value).toBe('Netflix');
+    expect(byId('r-importe').value).toBe('8500');
+    expect(byId('r-categoria').value).toBe('suscripciones');
+
+    submitRecurrente({ importe: 12000 });
+
+    expect(getStoredState().recurrentes[0].importe).toBe(12000);
+    // La lista se repinta con el valor nuevo.
+    expect(filaPorNombre('Netflix').textContent).toContain('$12.000');
+  });
+
+  it('conserva los meses salteados al editar', async () => {
+    await bootApp(conRecurrente(recurrente({ salteados: [3, 7] })));
+    abrirPestana();
+
+    abrirRecurrente('Netflix');
+    submitRecurrente({ importe: 9500 });
+
+    expect(getStoredState().recurrentes[0].salteados).toEqual([3, 7]);
+  });
+
+  it('elimina un recurrente y deja los gastos que ya generó', async () => {
+    await bootApp(conRecurrente());
+    abrirPestana();
+
+    filaPorNombre('Netflix').click();
+    byId('btn-delete-recurrente').click();
+
+    expect(getStoredState().recurrentes).toHaveLength(0);
+    expect(getStoredState().gastos).toHaveLength(1);
+    expect($('#presup-content').textContent).toContain('Sin recurrentes');
+  });
+
+  it('no borra si el usuario cancela la confirmación', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await bootApp(conRecurrente());
+    abrirPestana();
+
+    filaPorNombre('Netflix').click();
+    byId('btn-delete-recurrente').click();
+
+    expect(getStoredState().recurrentes).toHaveLength(1);
+    expect(byId('modal-recurrente').classList.contains('open')).toBe(true);
+    vi.restoreAllMocks();
+  });
+});
+
+describe('el mes siguiente usa el importe base vigente', () => {
+  it('autogenera el mes siguiente con el importe base', async () => {
+    await bootApp();
+    abrirPestana();
+    crearRecurrente();
+
+    clickMonth('presup-months', 1);
+
+    expect(getStoredState().gastos.map(g => g.mes)).toEqual([0, 1]);
+    expect(getStoredState().gastos[1].importe).toBe(8500);
+  });
+
+  it('usa el importe editado en el gasto del mes, no el de la base vieja', async () => {
+    await bootApp();
+    abrirPestana();
+    crearRecurrente();
+
+    // El requisito central: editar el gasto del mes actual actualiza la base,
+    // así que el mes siguiente se genera con ese importe.
+    navTo('gastos');
+    abrirGastoDesdeLista('Netflix');
+    submitGasto({ importe: 11500 });
+
+    clickMonth('gastos-months', 1);
+
+    expect(getStoredState().recurrentes[0].importe).toBe(11500);
+    expect(getStoredState().gastos.find(g => g.mes === 1).importe).toBe(11500);
+  });
+
+  it('el checkbox actualiza el gasto del mes visible al cambiar la base', async () => {
+    await bootApp(conRecurrente());
+    abrirPestana();
+
+    filaPorNombre('Netflix').click();
+    // El checkbox sólo aparece cuando ese mes ya tiene el gasto generado, y
+    // viene marcado.
+    expect(byId('r-aplicar-mes-group').hidden).toBe(false);
+    expect(byId('r-aplicar-mes').checked).toBe(true);
+    expect(byId('r-aplicar-mes-label').textContent).toBe('Aplicar también a Enero');
+
+    submitRecurrente({ importe: 9900 });
+
+    expect(getStoredState().recurrentes[0].importe).toBe(9900);
+    expect(getStoredState().gastos[0].importe).toBe(9900);
+  });
+
+  it('sin el checkbox, cambiar la base no toca el gasto ya generado', async () => {
+    await bootApp(conRecurrente());
+    abrirPestana();
+
+    filaPorNombre('Netflix').click();
+    byId('r-aplicar-mes').checked = false;
+    submitRecurrente({ importe: 9900 });
+
+    expect(getStoredState().recurrentes[0].importe).toBe(9900);
+    expect(getStoredState().gastos[0].importe).toBe(8500);
+  });
+
+  it('el checkbox no aparece si el mes todavía no tiene el gasto', async () => {
+    await bootApp(conRecurrente(recurrente({ desdeMes: 6 })));
+    abrirPestana();
+
+    filaPorNombre('Netflix').click();
+
+    expect(byId('r-aplicar-mes-group').hidden).toBe(true);
+  });
+});
+
+describe('pausar y reactivar', () => {
+  it('pausado no genera el mes siguiente y reactivado sí', async () => {
+    await bootApp();
+    abrirPestana();
+    crearRecurrente();
+
+    filaPorNombre('Netflix').querySelector('.switch').click();
+    expect(getStoredState().recurrentes[0].activo).toBe(false);
+
+    clickMonth('presup-months', 1);
+    expect(getStoredState().gastos.map(g => g.mes)).toEqual([0]);
+
+    // Reactivarlo carga el mes visible en el momento.
+    filaPorNombre('Netflix').querySelector('.switch').click();
+
+    expect(getStoredState().recurrentes[0].activo).toBe(true);
+    expect(getStoredState().gastos.map(g => g.mes)).toEqual([0, 1]);
+  });
+
+  it('el switch se puede operar con el teclado', async () => {
+    await bootApp(conRecurrente());
+    abrirPestana();
+
+    const sw = filaPorNombre('Netflix').querySelector('.switch');
+    sw.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(getStoredState().recurrentes[0].activo).toBe(false);
+    // La fila se repinta, así que el switch nuevo es otro nodo.
+    expect(filaPorNombre('Netflix').querySelector('.switch').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('no crea recurrentes ni gastos si el recurrente empieza en un mes futuro', async () => {
+    await bootApp();
+    abrirPestana();
+    crearRecurrente({ desde: 11 });
+
+    expect(getStoredState().gastos).toHaveLength(0);
+    expect($('#presup-content').textContent).toContain('desde Diciembre');
+  });
+});
+
+/** Abre el modal de un gasto por su detalle, sin depender del orden de la lista. */
+const abrirGastoDesdeLista = (detalle) => {
+  const item = $$('#gastos-list .gasto-item').find(el => el.querySelector('.gasto-name').textContent === detalle);
+  item.click();
+};
