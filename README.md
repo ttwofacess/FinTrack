@@ -10,12 +10,21 @@ FinTrack es una aplicación web ligera, moderna y **completamente gratuita** dis
 - **Dashboard Inteligente**: Visualiza de un vistazo tu balance mensual, ingresos totales, gastos y cumplimiento de presupuesto.
 - **Comparativa Mensual y Meta de Ahorro**: Cada mes se compara con el anterior (el balance y el gasto por categoría muestran con flechas si subiste o bajaste) y podés definir una meta de ahorro —en % de ingresos o como monto fijo— con su barra de progreso.
 - **Gestión de Gastos**: Clasifica tus salidas en categorías fijas (Vivienda, Servicios, Ahorro, etc.) y variables (Alimentación, Salidas, Ropa, etc.).
+- **Gastos Recurrentes**: Cargás el alquiler, Netflix o el gimnasio una sola vez y se generan solos cada mes. El importe base se edita donde quieras —desde la pestaña o desde el propio gasto— y el mes siguiente usa el valor nuevo; los ya generados se marcan con `↻`, se pueden pausar y borrar.
 - **Control de Presupuesto (Budget vs Real)**: Define límites mensuales por categoría y monitorea cuánto has ejecutado en tiempo real con alertas visuales.
 - **Seguimiento de Ingresos**: Registra tus fuentes de ingresos (Sueldo, Freelance, Inversiones) y visualiza proyecciones anuales.
 - **Historial Detallado**: Filtra y revisa tus movimientos por mes y categoría.
 - **Búsqueda y Orden en Gastos**: Encontrá un gasto del mes escribiendo parte de su nombre (sin tildes ni mayúsculas) y ordená la lista por monto o por categoría.
 - **Exportación de Datos**: Descarga toda tu información en formato JSON para tener un respaldo siempre a mano.
 - **Privacidad Total**: Tus datos se guardan localmente en tu navegador (LocalStorage). Nada se sube a servidores externos.
+
+### 🧾 Cómo se comportan los recurrentes
+
+- Se generan **hasta el mes actual**: los meses futuros no se llenan con gastos estimados.
+- El importe base manda: editás el gasto del mes más reciente y el mes siguiente ya sale con ese valor. Al editar desde la pestaña podés marcar "Aplicar también a {mes}" para corregir el gasto del mes que estás viendo.
+- Si borrás un gasto generado, no vuelve a aparecer en ese mes (queda registrado como salteado).
+- Si no abrás la app durante varios meses, esos meses se generan cuando los visités, con el **importe base actual** y no con el que correspondería; se corrige editando el gasto.
+- No se generan meses anteriores al que elegiste al crear el recurrente, ni para recurrentes pausados.
 
 ## 🚀 Instalación y Uso
 
