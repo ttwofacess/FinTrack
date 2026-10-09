@@ -159,7 +159,7 @@ function onMonthChange(mi) {
 // ── Callbacks de gastos ──────────────────────────────────
 function onGastoSave(gasto) {
   // Defensive re-validation (data should already be clean from the modal)
-  const { _edit, id, ...fields } = gasto;
+  const { _edit, id, _actualizarBase, ...fields } = gasto;
   const result = validateGasto(fields);
   if (!result.ok) {
     console.warn('[onGastoSave] Invalid gasto rejected:', result.errors, gasto);
@@ -180,10 +180,11 @@ function onGastoSave(gasto) {
     STATE.gastos.push(toSave);
   }
 
-  // Editar el gasto de un recurrente actualiza el importe base, pero sólo si es
-  // el mes más reciente: corregir marzo no debe cambiar lo que se cobra en
-  // octubre.
-  const recurrente = guardado ? sincronizarImporteBase(STATE, guardado) : null;
+  // El importe de un recurrente sólo cambia para ese mes. Actualizar el valor
+  // desde el que se generan los meses siguientes es una decisión explícita del
+  // usuario (el checkbox del modal), no un efecto secundario de editar: con
+  // inflación, cada mes tiene el importe que realmente se pagó.
+  const recurrente = (guardado && _actualizarBase) ? sincronizarImporteBase(STATE, guardado) : null;
   const persisted = saveS();
   renderGastos(STATE, onMonthChange, onGastoSave, onGastoDelete);
   renderDashboardActual();

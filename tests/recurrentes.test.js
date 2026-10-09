@@ -177,7 +177,7 @@ describe('sincronizarImporteBase', () => {
     { id: 'g2', detalle: 'Netflix', importe: 9500, mes: 8, categoria: 'suscripciones', recurrenteId: 'r1' },
   ]);
 
-  it('actualiza la base si el gasto es del mes más reciente', () => {
+  it('actualiza la base con el importe del gasto', () => {
     const s = conDosMeses();
 
     const r = sincronizarImporteBase(s, { ...s.gastos[1], importe: 10500 });
@@ -193,11 +193,21 @@ describe('sincronizarImporteBase', () => {
     expect(sincronizarImporteBase(s, { ...s.gastos[0], importe: 9500 }).importe).toBe(9500);
   });
 
-  it('no pisa la base al corregir un mes viejo', () => {
+  it('actualiza la base también desde un mes viejo si se lo piden', () => {
+    // La decisión de si el precio nuevo aplica a los meses siguientes la toma el
+    // usuario con el checkbox del modal, así que acá no se bloquea el mes viejo.
     const s = conDosMeses();
 
-    expect(sincronizarImporteBase(s, { ...s.gastos[0], importe: 3000 })).toBeNull();
-    expect(s.recurrentes[0].importe).toBe(8500);
+    expect(sincronizarImporteBase(s, { ...s.gastos[0], importe: 3000 }).importe).toBe(3000);
+  });
+
+  it('no toca los gastos ya cargados de otros meses', () => {
+    const s = conDosMeses();
+
+    sincronizarImporteBase(s, { ...s.gastos[0], importe: 3000 });
+
+    expect(s.gastos[0].importe).toBe(8500);
+    expect(s.gastos[1].importe).toBe(9500);
   });
 
   it('ignora gastos manuales', () => {
@@ -224,7 +234,7 @@ describe('sincronizarImporteBase', () => {
     expect(s.recurrentes[0].importe).toBe(8500);
   });
 
-  it('no confunde gastos de otro recurrente al calcular el mes más reciente', () => {
+  it('busca el recurrente por su id y no por otro campo', () => {
     const s = estado([recurrente()], [
       { id: 'g1', importe: 8500, mes: 3, recurrenteId: 'r1' },
       { id: 'g2', importe: 4000, mes: 11, recurrenteId: 'r2' },

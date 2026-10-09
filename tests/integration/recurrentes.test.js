@@ -108,20 +108,7 @@ describe('autogeneración al entrar a un mes', () => {
 });
 
 describe('importe base y salteos', () => {
-  it('actualiza el importe base al editar el gasto del mes actual', async () => {
-    await bootApp(conRecurrente());
-    clearToast();
-    navTo('gastos');
-
-    abrirGasto('Netflix');
-    submitGasto({ importe: 12000 });
-    await Promise.resolve();   // el aviso de la base se emite en un microtask
-
-    expect(getStoredState().recurrentes[0].importe).toBe(12000);
-    expect(toastText()).toContain('Importe base de Netflix actualizado');
-  });
-
-  it('no actualiza la base al corregir un gasto de un mes viejo', async () => {
+  it('edita sólo ese mes si no se marca el checkbox', async () => {
     await bootApp(estadoBase((s) => {
       s.recurrentes = [recurrente()];
       s.gastos = [
@@ -133,11 +120,87 @@ describe('importe base y salteos', () => {
     navTo('gastos');
 
     abrirGasto('Netflix');
+    expect(byId('f-actualizar-base-group').hidden).toBe(false);
+    expect(byId('f-actualizar-base').checked).toBe(false);
+    submitGasto({ importe: 12000 });
+    await Promise.resolve();   // el aviso de la base se emite en un microtask
+
+    // El mes editado cambia; la base y el otro mes quedan como estaban.
+    expect(getStoredState().gastos[0].importe).toBe(12000);
+    expect(getStoredState().gastos[1].importe).toBe(8500);
+    expect(getStoredState().recurrentes[0].importe).toBe(8500);
+    expect(toastText()).not.toContain('Importe base');
+  });
+
+  it('actualiza el importe base si se marca el checkbox', async () => {
+    await bootApp(conRecurrente());
+    clearToast();
+    navTo('gastos');
+
+    abrirGasto('Netflix');
+    byId('f-actualizar-base').checked = true;
+    submitGasto({ importe: 12000 });
+    await Promise.resolve();
+
+    expect(getStoredState().gastos[0].importe).toBe(12000);
+    expect(getStoredState().recurrentes[0].importe).toBe(12000);
+    expect(toastText()).toContain('Importe base de Netflix actualizado');
+  });
+
+  it('actualiza la base desde un mes viejo si se marca el checkbox', async () => {
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [recurrente()];
+      s.gastos = [
+        { id: 'viejo', detalle: 'Netflix', importe: 8500, mes: 0, categoria: 'suscripciones', recurrenteId: 'r1' },
+        { id: 'nuevo', detalle: 'Netflix', importe: 9500, mes: 1, categoria: 'suscripciones', recurrenteId: 'r1' },
+      ];
+    }));
+    clearToast();
+    navTo('gastos');
+
+    abrirGasto('Netflix');
+    byId('f-actualizar-base').checked = true;
     submitGasto({ importe: 3000 });
     await Promise.resolve();
 
-    expect(getStoredState().recurrentes[0].importe).toBe(8500);
-    expect(toastText()).not.toContain('Importe base');
+    expect(getStoredState().recurrentes[0].importe).toBe(3000);
+    // El otro mes ya cargado conserva lo que se pagó ese mes.
+    expect(getStoredState().gastos[1].importe).toBe(9500);
+  });
+
+  it('el mes siguiente usa el importe base, no el del mes editado', async () => {
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [recurrente()];
+      s.gastos = [{ id: 'viejo', detalle: 'Netflix', importe: 8500, mes: 0, categoria: 'suscripciones', recurrenteId: 'r1' }];
+    }));
+    navTo('gastos');
+
+    abrirGasto('Netflix');
+    submitGasto({ importe: 12000 });
+
+    // Sin tocar la base, noviembre se sigue generando con 8500.
+    clickMonth('gastos-months', 1);
+
+    expect(getStoredState().gastos.find(g => g.mes === 1).importe).toBe(8500);
+  });
+
+  it('no muestra el checkbox al editar un gasto manual', async () => {
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [recurrente()];
+      s.gastos = [{ id: 'manual', detalle: 'Cena', importe: 8000, mes: 0, categoria: 'salidas', medio: 'debito' }];
+    }));
+    navTo('gastos');
+
+    abrirGasto('Cena');
+
+    expect(byId('f-actualizar-base-group').hidden).toBe(true);
+  });
+
+  it('no muestra el checkbox al crear un gasto nuevo', async () => {
+    await bootApp();
+    byId('fab').click();
+
+    expect(byId('f-actualizar-base-group').hidden).toBe(true);
   });
 
   it('no actualiza la base al editar un gasto manual', async () => {
@@ -431,15 +494,15 @@ describe('el mes siguiente usa el importe base vigente', () => {
     expect(getStoredState().gastos[1].importe).toBe(8500);
   });
 
-  it('usa el importe editado en el gasto del mes, no el de la base vieja', async () => {
+  it('usa el importe editado si el usuario marca el checkbox', async () => {
     await bootApp();
     abrirPestana();
     crearRecurrente();
 
-    // El requisito central: editar el gasto del mes actual actualiza la base,
-    // así que el mes siguiente se genera con ese importe.
+    // Marcar el checkbox es lo que hace que el precio nuevo riga hacia adelante.
     navTo('gastos');
     abrirGastoDesdeLista('Netflix');
+    byId('f-actualizar-base').checked = true;
     submitGasto({ importe: 11500 });
 
     clickMonth('gastos-months', 1);

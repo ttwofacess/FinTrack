@@ -65,26 +65,25 @@ export function ensureMonthRecurrentes(state, mi, mesActual = new Date().getMont
 }
 
 /**
- * Si el gasto editado es el más reciente de su recurrente, actualiza el importe
- * base para que el mes siguiente se genere con ese valor.
+ * Actualiza el importe base de un recurrente con el importe de uno de sus gastos.
  *
- * La regla del "mes más reciente" evita que corregir un gasto viejo pise el
- * valor vigente: editar marzo no debe cambiar lo que se cobra en octubre.
+ * Cada mes generado guarda su propio importe, así que corregir un gasto NUNCA
+ * reescribe los meses ya cargados: esto sólo cambia el valor desde el que se
+ * generan los meses que todavía no existen.
+ *
+ * No importa qué mes se esté editando: la decisión de si el precio nuevo aplica
+ * a los meses siguientes la toma el usuario, marcando el checkbox del modal. Por
+ * eso esta función no consulta el estado para decidir — sólo verifica que el
+ * gasto sea de un recurrente y que el importe haya cambiado de verdad.
  *
  * @returns {object|null} el recurrente actualizado, o null si no hubo nada que
- *   sincronizar (gasto manual, recurrente inexistente, mes viejo o importe igual)
+ *   sincronizar (gasto manual, recurrente inexistente o borrado, mismo importe)
  */
 export function sincronizarImporteBase(state, gasto) {
   if (!state || !gasto?.recurrenteId) return null;
 
   const r = state.recurrentes?.find(x => x.id === gasto.recurrenteId);
   if (!r || r.importe === gasto.importe) return null;
-
-  const mesMasReciente = state.gastos
-    .filter(g => g.recurrenteId === r.id)
-    .reduce((max, g) => (Number.isInteger(g.mes) && g.mes > max ? g.mes : max), -1);
-
-  if (gasto.mes < mesMasReciente) return null;
 
   r.importe = gasto.importe;
   return r;
