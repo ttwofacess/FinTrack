@@ -211,9 +211,14 @@ function tieneGastoDelMes(state, r) {
   return state.gastos.some(g => g.recurrenteId === r.id && g.mes === state.selectedMonth);
 }
 
-function _populateForm(selectedMonth, defaults = {}) {
+/**
+ * @param {number} mesPorDefecto — mes que queda seleccionado en "desde el mes de"
+ * @param {object} [defaults]     — { desdeMes } explícito, gana sobre el default
+ */
+function _populateForm(mesPorDefecto, defaults = {}) {
+  const desde = defaults.desdeMes ?? mesPorDefecto;
   document.getElementById('r-desde').innerHTML =
-    MESES.map((m, i) => html`<option value="${i}" ${i === (defaults.desdeMes ?? selectedMonth) ? 'selected' : ''}>${m}</option>`).join('');
+    MESES.map((m, i) => html`<option value="${i}" ${i === desde ? 'selected' : ''}>${m}</option>`).join('');
   document.getElementById('r-categoria').innerHTML =
     html`<optgroup label="Gastos Fijos">${raw(CAT_FIJOS.map(c => html`<option value="${c.key}">${c.icon} ${c.label}</option>`).join(''))}</optgroup>
      <optgroup label="Gastos Variables">${raw(CAT_VARIABLES.map(c => html`<option value="${c.key}">${c.icon} ${c.label}</option>`).join(''))}</optgroup>`;
@@ -247,7 +252,10 @@ export function openNewRecurrente(state) {
   document.getElementById('r-detalle').value = '';
   document.getElementById('r-importe').value = '';
   document.getElementById('btn-delete-recurrente').style.display = 'none';
-  _populateForm(state.selectedMonth);
+  // El default es el mes real, NO el que se está mirando: si el usuario está
+  // revisando enero y carga Netflix, con el mes visible se generaba de enero a
+  // diciembre. Un recurrente nuevo arranca en el mes en que se está pagando.
+  _populateForm(new Date().getMonth());
   document.getElementById('r-medio').value = 'efectivo';
   _syncAplicarMes(state, null);
   document.getElementById('modal-recurrente').classList.add('open');

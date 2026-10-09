@@ -27,6 +27,7 @@ FinTrack es una aplicación web ligera, moderna y **completamente gratuita** dis
 - Si corregís el **"Desde el mes de"** de un recurrente y lo corrés hacia adelante, los gastos que se habían generado antes se borran: ya no correspondían. Los que **editaste a mano se respetan**, porque son un gasto real que decidiste tener.
 - Si borrás un gasto generado, no vuelve a aparecer en ese mes (queda registrado como salteado).
 - Si no abrás la app durante varios meses, esos meses se generan cuando los visités, con el **importe base actual** y no con el que correspondería; se corrige editando el gasto.
+- Un recurrente nuevo arranca en el **mes real actual**, no en el mes que estés mirando. Si lo cargás en junio, no se genera nada para enero.
 - No se generan meses anteriores al que elegiste al crear el recurrente, ni para recurrentes pausados.
 
 ## 🚀 Instalación y Uso

@@ -440,10 +440,15 @@ const filaPorNombre = (nombre) =>
 
 const abrirPestana = () => { navTo('presupuesto'); tab('recurrentes'); };
 
+// El default del modal es el mes real (octubre en estos tests), así que el
+// "desde" va explícito cuando el test necesita que el recurrente arranque en
+// enero, que es el mes que tienen delante.
 const crearRecurrente = (over = {}) => {
   byId('btn-new-recurrente').click();
   submitRecurrente({ detalle: 'Netflix', importe: 8500, categoria: 'suscripciones', medio: 'credito', ...over });
 };
+
+const crearRecurrenteEnEnero = (over = {}) => crearRecurrente({ desde: 0, ...over });
 
 describe('la pestaña Recurrentes', () => {
   it('es la cuarta pestaña y muestra el botón de nuevo sólo ahí', async () => {
@@ -501,11 +506,42 @@ describe('la pestaña Recurrentes', () => {
 });
 
 describe('alta y edición desde la UI', () => {
+  it('el "desde" por defecto es el mes real, no el que se está mirando', async () => {
+    // El usuario está revisando enero (mes 0) con la app en octubre (mes 9).
+    await bootApp();
+    abrirPestana();
+
+    byId('btn-new-recurrente').click();
+
+    expect(byId('r-desde').value).toBe('9');
+  });
+
+  it('crear un recurrente revisando un mes pasado no lo genera hacia atrás', async () => {
+    await bootApp();
+    abrirPestana();
+    clickMonth('presup-months', 0);   // revisando enero
+    byId('btn-new-recurrente').click();
+    submitRecurrente({ detalle: 'Netflix', importe: 8500, categoria: 'suscripciones' });
+
+    // Queda arrancando en el mes real (octubre), así que enero no se toca.
+    expect(getStoredState().recurrentes[0].desdeMes).toBe(9);
+    expect(getStoredState().gastos.every(g => g.mes === 9)).toBe(true);
+  });
+
+  it('al editar, el select muestra el "desde" real del recurrente', async () => {
+    await bootApp(conRecurrente(recurrente({ desdeMes: 3 })));
+    abrirPestana();
+
+    filaPorNombre('Netflix').click();
+
+    expect(byId('r-desde').value).toBe('3');
+  });
+
   it('crea un recurrente, lo lista y carga el gasto del mes actual', async () => {
     await bootApp();
     abrirPestana();
 
-    crearRecurrente();
+    crearRecurrenteEnEnero();
     await Promise.resolve();   // el toast combinado se emite en un microtask
 
     expect(getStoredState().recurrentes).toHaveLength(1);
@@ -584,7 +620,7 @@ describe('el mes siguiente usa el importe base vigente', () => {
   it('autogenera el mes siguiente con el importe base', async () => {
     await bootApp();
     abrirPestana();
-    crearRecurrente();
+    crearRecurrenteEnEnero();
 
     clickMonth('presup-months', 1);
 
@@ -595,7 +631,7 @@ describe('el mes siguiente usa el importe base vigente', () => {
   it('usa el importe editado si el usuario marca el checkbox', async () => {
     await bootApp();
     abrirPestana();
-    crearRecurrente();
+    crearRecurrenteEnEnero();
 
     // Marcar el checkbox es lo que hace que el precio nuevo riga hacia adelante.
     navTo('gastos');
@@ -652,7 +688,7 @@ describe('pausar y reactivar', () => {
   it('pausado no genera el mes siguiente y reactivado sí', async () => {
     await bootApp();
     abrirPestana();
-    crearRecurrente();
+    crearRecurrenteEnEnero();
 
     filaPorNombre('Netflix').querySelector('.switch').click();
     expect(getStoredState().recurrentes[0].activo).toBe(false);
