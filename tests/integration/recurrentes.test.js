@@ -219,6 +219,21 @@ describe('el modal de recurrente', () => {
   });
 });
 
+describe('el indicador en la lista de gastos', () => {
+  it('marca con ↻ el gasto generado y no los manuales', async () => {
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [recurrente()];
+      s.gastos = [{ id: 'manual', detalle: 'Cena', importe: 8000, mes: 0, categoria: 'salidas', medio: 'debito' }];
+    }));
+    navTo('gastos');
+
+    expect($$('#gastos-list .gasto-meta').map(n => n.textContent)).toEqual([
+      'Suscripciones · 💳 crédito · ↻',   // el generado, último cargado → primero
+      'Salidas · debito',
+    ]);
+  });
+});
+
 describe('persistencia', () => {
   it('conserva los recurrentes y los gastos generados al reiniciar', async () => {
     await bootApp(conRecurrente());
