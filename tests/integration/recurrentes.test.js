@@ -228,7 +228,7 @@ describe('el indicador en la lista de gastos', () => {
     navTo('gastos');
 
     expect($$('#gastos-list .gasto-meta').map(n => n.textContent)).toEqual([
-      'Suscripciones · 💳 crédito · ↻',   // el generado, último cargado → primero
+      'Suscripciones ↻ · 💳 crédito',   // el generado, último cargado → primero
       'Salidas · debito',
     ]);
   });
