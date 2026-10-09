@@ -14,7 +14,7 @@ import { renderPresupuesto, initPresupuestoEvents, initMetaModal } from './presu
 import { renderIngresos, initIngresoModal, initIngresosControls } from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
 import { initDonateModal }                           from './donate.js';
-import { ensureMonthRecurrentes, sincronizarImporteBase, registrarSalteo,
+import { ensureMonthRecurrentes, sincronizarImporteBase, registrarSalteo, recortarMesesAntes,
          initRecurrentesModal, initRecurrentesEvents } from './recurrentes.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro, validateRecurrente, uid } from './utils.js';
 
@@ -172,8 +172,18 @@ function onGastoSave(gasto) {
     const idx = STATE.gastos.findIndex(g => g.id === clean.id);
     if (idx >= 0) {
       const { _edit: _, ...toSave } = clean;
-      STATE.gastos[idx] = { ...STATE.gastos[idx], ...toSave };
-      guardado = STATE.gastos[idx];
+      const anterior = STATE.gastos[idx];
+      const nuevo = { ...anterior, ...toSave };
+      // Marca los gastos recurrentes que el usuario editó a mano. Sirve para
+      // distinguirlos de los que quedaron intactos: si después se adelanta el
+      // "desde" del recurrente, los intactos se borran (ya no corresponden) y
+      // estos se respetan, porque son un gasto real que el usuario quiso conservar.
+      if (nuevo.recurrenteId && !nuevo.editado) {
+        const CAMBIOS = ['detalle', 'importe', 'mes', 'categoria', 'medio'];
+        if (CAMBIOS.some(k => anterior[k] !== nuevo[k])) nuevo.editado = true;
+      }
+      STATE.gastos[idx] = nuevo;
+      guardado = nuevo;
     }
   } else {
     const { _edit: _, ...toSave } = clean;
@@ -299,6 +309,12 @@ function onRecurrenteSave(rec) {
     if (delMes) delMes.importe = limpio.importe;
   }
 
+  // Adelantar el "desde" es una corrección retroactiva: lo generado antes ya no
+  // corresponde y se va, salvo lo que el usuario editó a mano.
+  const eliminados = (existente && limpio.desdeMes > existente.desdeMes)
+    ? recortarMesesAntes(STATE, limpio.id, limpio.desdeMes)
+    : 0;
+
   const persisted = saveS();
 
   // Crear uno nuevo o reactivar uno pausado carga el mes actual en el momento.
@@ -308,10 +324,15 @@ function onRecurrenteSave(rec) {
   renderDashboardActual();
 
   // El modal muestra su propio toast apenas onRecurrenteSave devuelve y
-  // showToast reemplaza el contenido: si se generó algo, el aviso se arma acá y
-  // espera un microtask, para que el usuario lea las dos cosas juntas.
-  if (generados > 0 && persisted) {
-    queueMicrotask(() => showToast(`✓ Recurrente guardado · ${MESES[STATE.selectedMonth]} actualizado`));
+  // showToast reemplaza el contenido: si pasó algo que el usuario tiene que
+  // saber, el aviso se arma acá y espera un microtask.
+  if (persisted && (generados > 0 || eliminados > 0)) {
+    queueMicrotask(() => {
+      const partes = [];
+      if (generados > 0) partes.push(`${MESES[STATE.selectedMonth]} actualizado`);
+      if (eliminados > 0) partes.push(`${eliminados} gasto${eliminados > 1 ? 's' : ''} anterior${eliminados > 1 ? 'es' : ''} eliminado${eliminados > 1 ? 's' : ''}`);
+      showToast(`✓ Recurrente guardado · ${partes.join(', ')}`);
+    });
   }
   return persisted;
 }

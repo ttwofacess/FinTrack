@@ -24,6 +24,7 @@ FinTrack es una aplicación web ligera, moderna y **completamente gratuita** dis
 - Cada mes generado guarda **su propio importe**: corregir el gasto de marzo no toca nada más. Con inflación es lo normal — en marzo pagaste $8.000 y en abril $9.000 — y recién cargás el de abril cuando te toca.
 - El **importe base** es el valor con el que se generan los meses que todavía no existen. Se cambia desde la pestaña Recurrentes, o desde el propio gasto marcando *"Actualizar el importe base · {nombre} (meses siguientes)"* cuando el precio cambió de verdad y no solo por ese mes (el alquiler renegociado, la suscripción que subió para todos).
 - Ese checkbox solo aparece al editar un gasto recurrente, y arranca desmarcado.
+- Si corregís el **"Desde el mes de"** de un recurrente y lo corrés hacia adelante, los gastos que se habían generado antes se borran: ya no correspondían. Los que **editaste a mano se respetan**, porque son un gasto real que decidiste tener.
 - Si borrás un gasto generado, no vuelve a aparecer en ese mes (queda registrado como salteado).
 - Si no abrás la app durante varios meses, esos meses se generan cuando los visités, con el **importe base actual** y no con el que correspondería; se corrige editando el gasto.
 - No se generan meses anteriores al que elegiste al crear el recurrente, ni para recurrentes pausados.

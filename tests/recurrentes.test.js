@@ -3,6 +3,7 @@ import {
   ensureMonthRecurrentes,
   sincronizarImporteBase,
   registrarSalteo,
+  recortarMesesAntes,
 } from '../recurrentes.js';
 
 const OCTUBRE = 9;
@@ -297,5 +298,62 @@ describe('registrarSalteo', () => {
     s.gastos = s.gastos.filter(g => g.id !== 'g1');
     expect(ensureMonthRecurrentes(s, 3, OCTUBRE)).toBe(0);
     expect(ensureMonthRecurrentes(s, 4, OCTUBRE)).toBe(1);
+  });
+});
+
+describe('recortarMesesAntes', () => {
+  const conMeses = () => estado([recurrente({ desdeMes: 5 })], [
+    { id: 'g1', importe: 8500, mes: 0, recurrenteId: 'r1' },
+    { id: 'g2', importe: 8500, mes: 4, recurrenteId: 'r1' },
+    { id: 'g3', importe: 8500, mes: 5, recurrenteId: 'r1' },
+    { id: 'g4', importe: 8500, mes: 7, recurrenteId: 'r1' },
+    { id: 'otro', importe: 100, mes: 1 },
+  ]);
+
+  it('borra los gastos intactos anteriores al nuevo desdeMes', () => {
+    const s = conMeses();
+
+    expect(recortarMesesAntes(s, 'r1', 5)).toBe(2);
+    expect(s.gastos.map(g => g.id)).toEqual(['g3', 'g4', 'otro']);
+  });
+
+  it('respeta los gastos que el usuario editó a mano', () => {
+    const s = conMeses();
+    s.gastos[0].editado = true;
+
+    expect(recortarMesesAntes(s, 'r1', 5)).toBe(1);
+    expect(s.gastos.map(g => g.id)).toEqual(['g1', 'g3', 'g4', 'otro']);
+  });
+
+  it('no toca los gastos de otro recurrente ni los manuales', () => {
+    const s = conMeses();
+    s.gastos.push({ id: 'g5', importe: 100, mes: 2, recurrenteId: 'r2' });
+
+    expect(recortarMesesAntes(s, 'r1', 5)).toBe(2);
+    expect(s.gastos.find(g => g.id === 'g5')).toBeTruthy();
+    expect(s.gastos.find(g => g.id === 'otro')).toBeTruthy();
+  });
+
+  it('no borra nada si no hay gastos anteriores', () => {
+    const s = conMeses();
+    s.gastos = s.gastos.filter(g => g.mes >= 5 || !g.recurrenteId);
+
+    expect(recortarMesesAntes(s, 'r1', 5)).toBe(0);
+    expect(s.gastos).toHaveLength(3);
+  });
+
+  it('tolera un estado inválido', () => {
+    expect(recortarMesesAntes(null, 'r1', 5)).toBe(0);
+    expect(recortarMesesAntes({ gastos: [] }, null, 5)).toBe(0);
+    expect(recortarMesesAntes({}, 'r1', 5)).toBe(0);
+  });
+
+  it('los meses borrados no se regeneran con el nuevo desdeMes', () => {
+    const s = conMeses();
+
+    recortarMesesAntes(s, 'r1', 5);
+
+    expect(ensureMonthRecurrentes(s, 3, OCTUBRE)).toBe(0);
+    expect(s.gastos).toHaveLength(3);
   });
 });

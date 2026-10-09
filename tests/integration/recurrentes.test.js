@@ -282,6 +282,104 @@ describe('el modal de recurrente', () => {
   });
 });
 
+describe('correr el "desde" de un recurrente', () => {
+  // Siete meses ya generados (enero..julio) y el mes visible en enero: el
+  // recurrente ya cubrió todos, así que la app no genera nada extra al navegar.
+  const SIETE_MESES = [0, 1, 2, 3, 4, 5, 6];
+  const conMesesGenerados = (meses = SIETE_MESES, extra = {}) => estadoBase((s) => {
+    s.recurrentes = [recurrente()];
+    s.gastos = meses.map(mi => ({
+      id: `g${mi}`, detalle: 'Netflix', importe: 8500, mes: mi,
+      categoria: 'suscripciones', medio: 'credito', recurrenteId: 'r1', ...extra,
+    }));
+  });
+
+  const editarDesde = (nombre, valores) => {
+    navTo('presupuesto');
+    tab('recurrentes');
+    abrirRecurrente(nombre);
+    submitRecurrente(valores);
+    return Promise.resolve();   // el aviso se emite en un microtask
+  };
+
+  const editarGastoDeEnero = (campos) => {
+    navTo('gastos');
+    abrirGastoDesdeLista('Netflix');
+    submitGasto(campos);
+  };
+
+  it('borra los gastos generados antes del nuevo "desde"', async () => {
+    await bootApp(conMesesGenerados());
+
+    await editarDesde('Netflix', { detalle: 'Netflix', desde: 5 });
+
+    expect(getStoredState().recurrentes[0].desdeMes).toBe(5);
+    expect(getStoredState().gastos.map(g => g.mes)).toEqual([5, 6]);
+    expect(toastText()).toContain('5 gastos anteriores eliminados');
+  });
+
+  it('conserva los gastos que el usuario editó a mano', async () => {
+    await bootApp(conMesesGenerados());
+
+    // Corregir el importe de enero lo convierte en un gasto que el usuario quiso.
+    editarGastoDeEnero({ importe: 12000 });
+
+    await editarDesde('Netflix', { detalle: 'Netflix', desde: 5 });
+
+    const s = getStoredState();
+    expect(s.gastos.map(g => g.mes).sort((a, b) => a - b)).toEqual([0, 5, 6]);
+    expect(s.gastos.find(g => g.mes === 0).importe).toBe(12000);
+    expect(toastText()).toContain('4 gastos anteriores eliminados');
+  });
+
+  it('no borra nada si el "desde" no se adelanta', async () => {
+    await bootApp(conMesesGenerados());
+
+    await editarDesde('Netflix', { detalle: 'Netflix', importe: 9500 });
+
+    expect(getStoredState().gastos).toHaveLength(7);
+    expect(toastText()).not.toContain('eliminados');
+  });
+
+  it('no borra nada si el "desde" se atrasa', async () => {
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [recurrente({ desdeMes: 5 })];
+      s.gastos = [5, 6].map(mi => ({
+        id: `g${mi}`, detalle: 'Netflix', importe: 8500, mes: mi,
+        categoria: 'suscripciones', recurrenteId: 'r1',
+      }));
+    }));
+
+    await editarDesde('Netflix', { detalle: 'Netflix', desde: 0 });
+
+    // Adelantar el "desde" fue lo que borró; atrasarlo no toca lo que ya está.
+    expect(getStoredState().gastos.map(g => g.mes)).toEqual([5, 6]);
+  });
+
+  it('abrir y guardar sin cambiar nada no marca el gasto como editado', async () => {
+    await bootApp(conMesesGenerados());
+
+    editarGastoDeEnero({ detalle: 'Netflix' });
+
+    expect(getStoredState().gastos[0].editado).toBeUndefined();
+
+    await editarDesde('Netflix', { detalle: 'Netflix', desde: 5 });
+
+    // Sin cambios reales, el gasto de enero era intacto y se fue con los demás.
+    expect(getStoredState().gastos.map(g => g.mes)).toEqual([5, 6]);
+  });
+
+  it('marca el gasto como editado sólo si cambió algo', async () => {
+    await bootApp(conMesesGenerados());
+
+    editarGastoDeEnero({ importe: 12000 });
+
+    expect(getStoredState().gastos[0].editado).toBe(true);
+    // El importe base no se toca sin marcar el checkbox.
+    expect(getStoredState().recurrentes[0].importe).toBe(8500);
+  });
+});
+
 describe('el indicador en la lista de gastos', () => {
   it('marca con ↻ el gasto generado y no los manuales', async () => {
     await bootApp(estadoBase((s) => {
@@ -517,23 +615,23 @@ describe('el mes siguiente usa el importe base vigente', () => {
 
     filaPorNombre('Netflix').click();
     // El checkbox sólo aparece cuando ese mes ya tiene el gasto generado, y
-    // viene marcado.
+    // viene desmarcado: no se pisa nada del usuario sin que lo pida.
     expect(byId('r-aplicar-mes-group').hidden).toBe(false);
-    expect(byId('r-aplicar-mes').checked).toBe(true);
+    expect(byId('r-aplicar-mes').checked).toBe(false);
     expect(byId('r-aplicar-mes-label').textContent).toBe('Aplicar también a Enero');
 
+    byId('r-aplicar-mes').checked = true;
     submitRecurrente({ importe: 9900 });
 
     expect(getStoredState().recurrentes[0].importe).toBe(9900);
     expect(getStoredState().gastos[0].importe).toBe(9900);
   });
 
-  it('sin el checkbox, cambiar la base no toca el gasto ya generado', async () => {
+  it('sin marcar el checkbox, cambiar la base no toca el gasto ya generado', async () => {
     await bootApp(conRecurrente());
     abrirPestana();
 
     filaPorNombre('Netflix').click();
-    byId('r-aplicar-mes').checked = false;
     submitRecurrente({ importe: 9900 });
 
     expect(getStoredState().recurrentes[0].importe).toBe(9900);

@@ -109,6 +109,34 @@ export function registrarSalteo(state, gasto) {
   return r;
 }
 
+/**
+ * Borra los gastos generados de un recurrente que quedaron antes de su nuevo
+ * `desdeMes`.
+ *
+ * Correr el "desde" hacia adelante es una corrección: el recurrente nunca
+ * aplicaba a esos meses, así que los gastos que se generaron ahí por error no
+ * deberían seguir sumando al balance de enero a mayo.
+ *
+ * Sólo se borran los **intactos**: los que el usuario editó a mano (`editado`)
+ * son un gasto real que decidió tener, y borrarlos sin permiso sería perder
+ * información. Los meses que quedan vacíos no hacen falta registrarlos como
+ * salteados, porque con `desdeMes` corrido `ensureMonthRecurrentes` ya no los
+ * vuelve a generar.
+ *
+ * @returns {number} cuántos gastos se borraron
+ */
+export function recortarMesesAntes(state, recurrenteId, desdeMes) {
+  if (!state || !recurrenteId || !Array.isArray(state.gastos)) return 0;
+
+  const antes = state.gastos.filter(g =>
+    g.recurrenteId === recurrenteId && g.mes < desdeMes && !g.editado
+  );
+  if (antes.length === 0) return 0;
+
+  state.gastos = state.gastos.filter(g => !antes.includes(g));
+  return antes.length;
+}
+
 // ── Pantalla ───────────────────────────────────────────────
 
 let editingRecurrenteId = null;
@@ -197,18 +225,19 @@ function _populateForm(selectedMonth, defaults = {}) {
  * Sólo tiene sentido en edición y cuando el mes visible ya tiene el gasto
  * generado: si todavía no existe, se va a generar con el importe base nuevo y no
  * hay nada que ajustar.
+ *
+ * Arranca **desmarcado**, igual que el checkbox del modal de gasto. Marcado por
+ * defecto pisaba en silencio un importe que el usuario había editado a mano
+ * (típico con inflación), que es justo lo que estos dos checkboxes evitan hacer.
  */
 function _syncAplicarMes(state, r) {
   const group = document.getElementById('r-aplicar-mes-group');
-  const aplica = document.getElementById('r-aplicar-mes');
   const visible = Boolean(r) && tieneGastoDelMes(state, r);
 
   group.hidden = !visible;
+  document.getElementById('r-aplicar-mes').checked = false;
   if (visible) {
     document.getElementById('r-aplicar-mes-label').textContent = `Aplicar también a ${MESES[state.selectedMonth]}`;
-    aplica.checked = true;
-  } else {
-    aplica.checked = false;
   }
 }
 
