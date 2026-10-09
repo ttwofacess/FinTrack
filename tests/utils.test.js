@@ -9,7 +9,7 @@ import {
   deltasCategorias, getBalancesAnuales, metaAhorroMonto, progresoMetaAhorro,
   sanitizeText, sanitizeImporte, sanitizeMes, sanitizeEnum,
   normalizeText, matchesQuery, sortRecords, SORT_MODES,
-  validateBudgetUpdate, validateMetaAhorro, validateGasto, validateIngreso,
+  validateBudgetUpdate, validateMetaAhorro, validateGasto, validateIngreso, validateRecurrente,
   MAX_BUDGET_AMOUNT, META_TIPOS,
 } from '../utils.js';
 import { ALL_CATS, MESES } from '../constants.js';
@@ -1230,6 +1230,120 @@ describe('validateIngreso', () => {
 
   it('does not require a categoria', () => {
     expect(validateIngreso({ descripcion: 'Extra', importe: 10, mes: 1, tipo: 'freelance' }).ok).toBe(true);
+  });
+});
+
+describe('validateRecurrente', () => {
+  const valid = {
+    detalle: 'Netflix', importe: '8500', categoria: 'suscripciones',
+    medio: 'credito', activo: true, desdeMes: '9', salteados: [3],
+  };
+
+  it('accepts a well-formed recurrente and normalises the fields', () => {
+    const r = validateRecurrente(valid);
+    expect(r.ok).toBe(true);
+    expect(r.data).toEqual({
+      detalle: 'Netflix',
+      importe: 8500,
+      categoria: 'suscripciones',
+      medio: 'credito',
+      activo: true,
+      desdeMes: 9,
+      salteados: [3],
+    });
+  });
+
+  it('accepts a recurrente with only the required fields filled', () => {
+    const r = validateRecurrente({ detalle: 'Alquiler', importe: 250000, categoria: 'vivienda' });
+    expect(r.ok).toBe(true);
+    expect(r.data.activo).toBe(true);
+    expect(r.data.desdeMes).toBe(0);
+    expect(r.data.salteados).toEqual([]);
+    expect(r.data.medio).toBe('efectivo');
+  });
+
+  it('accepts an importe written in es-AR format', () => {
+    expect(validateRecurrente({ ...valid, importe: '8.500,50' }).data.importe).toBe(8500.5);
+  });
+
+  it('trims the detalle', () => {
+    expect(validateRecurrente({ ...valid, detalle: '  Gimnasio  ' }).data.detalle).toBe('Gimnasio');
+  });
+
+  it('rejects an empty detalle', () => {
+    const r = validateRecurrente({ ...valid, detalle: '   ' });
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain('El detalle no puede estar vacío.');
+  });
+
+  it('rejects a detalle longer than 120 chars', () => {
+    const r = validateRecurrente({ ...valid, detalle: 'a'.repeat(121) });
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain('El detalle no puede superar los 120 caracteres.');
+    expect(validateRecurrente({ ...valid, detalle: 'a'.repeat(120) }).ok).toBe(true);
+  });
+
+  it('rejects an empty categoria', () => {
+    const r = validateRecurrente({ ...valid, categoria: '' });
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain('Seleccioná una categoría.');
+  });
+
+  it('explains how to write an ambiguous importe', () => {
+    const r = validateRecurrente({ ...valid, importe: '250.000' });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toContain('es ambiguo');
+    expect(r.errors[0]).toContain('250000');
+    expect(r.errors[0]).toContain('250.000,00');
+  });
+
+  it('rejects a non-numeric, zero or negative importe', () => {
+    expect(validateRecurrente({ ...valid, importe: 'abc' }).errors)
+      .toContain('El importe debe ser un número mayor que cero.');
+    expect(validateRecurrente({ ...valid, importe: 0 }).ok).toBe(false);
+    expect(validateRecurrente({ ...valid, importe: -10 }).ok).toBe(false);
+  });
+
+  it('rejects an excessively large importe', () => {
+    const r = validateRecurrente({ ...valid, importe: 1_000_000_000 });
+    expect(r.ok).toBe(false);
+    expect(r.errors).toContain('El importe es demasiado alto.');
+  });
+
+  it('falls back to the first medio for an unknown payment method', () => {
+    expect(validateRecurrente({ ...valid, medio: 'bitcoin' }).data.medio).toBe('efectivo');
+  });
+
+  it('coerces activo to a boolean, defaulting to true', () => {
+    const activo = (v) => validateRecurrente({ ...valid, activo: v }).data.activo;
+    expect(activo(undefined)).toBe(true);
+    expect(activo(null)).toBe(true);
+    expect(activo(false)).toBe(false);
+    expect(activo(0)).toBe(false);
+  });
+
+  it('clamps desdeMes to a valid month index', () => {
+    const desde = (v) => validateRecurrente({ ...valid, desdeMes: v }).data.desdeMes;
+    expect(desde(-3)).toBe(0);
+    expect(desde(15)).toBe(11);
+  });
+
+  it('keeps only valid, unique salteados', () => {
+    const r = validateRecurrente({ ...valid, salteados: [3, 3, 0, 11, -1, 12, 'x', null, 2.5] });
+    expect(r.data.salteados).toEqual([0, 3, 11]);
+  });
+
+  it('replaces garbage salteados with an empty array', () => {
+    expect(validateRecurrente({ ...valid, salteados: 'nada' }).data.salteados).toEqual([]);
+    expect(validateRecurrente({ ...valid, salteados: null }).data.salteados).toEqual([]);
+  });
+
+  it('still sanitises the recurrent fields when the required ones fail', () => {
+    expect(validateRecurrente({ detalle: '', importe: 'x', categoria: '' }).errors).toHaveLength(3);
+  });
+
+  it('returns no data when invalid', () => {
+    expect(validateRecurrente({}).data).toBeUndefined();
   });
 });
 

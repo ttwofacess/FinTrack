@@ -539,6 +539,55 @@ export function validateGasto(g) {
 }
 
 /**
+ * Validates a recurrente object.
+ *
+ * Mismas reglas que `validateGasto` para detalle/importe/categoría/medio, más
+ * las propias del recurrente: `activo` booleano, `desdeMes` dentro de 0-11 y
+ * `salteados` como lista de meses válidos sin repetir.
+ *
+ * `activo`, `desdeMes` y `salteados` nunca son un error: se sanean igual que en
+ * `normalizeState`, para que el caller pueda guardar siempre el resultado.
+ *
+ * Ojo: `data` es la forma completa del recurrente, así que al guardar hay que
+ * partir del recurrente existente (`{ ...existente, ...data }`) en vez de
+ * reemplazar el objeto entero: si no, los `salteados` acumulados se perderían.
+ *
+ * @param {object} r — { detalle, importe, categoria, medio, activo, desdeMes, salteados }
+ * @returns {{ ok: boolean, errors: string[], data?: object }}
+ */
+export function validateRecurrente(r) {
+  const errors = [];
+
+  const detalle   = sanitizeText(r?.detalle);
+  const importe   = sanitizeImporte(r?.importe);
+  const categoria = sanitizeText(r?.categoria);
+  const medio     = sanitizeEnum(r?.medio, VALID_MEDIOS);
+
+  if (!detalle)                     errors.push('El detalle no puede estar vacío.');
+  if (detalle.length > 120)         errors.push('El detalle no puede superar los 120 caracteres.');
+  if (isNaN(importe)) {
+    errors.push(esImporteAmbiguo(r?.importe)
+      ? `El importe "${String(r.importe).trim()}" es ambiguo: el punto puede ser decimal o de miles; ${IMPORTE_AMBIGUO_AYUDA}.`
+      : 'El importe debe ser un número mayor que cero.');
+  } else if (importe <= 0) {
+    errors.push('El importe debe ser un número mayor que cero.');
+  }
+  if (importe > 999_999_999)        errors.push('El importe es demasiado alto.');
+  if (!categoria)                   errors.push('Seleccioná una categoría.');
+
+  const activo = r?.activo === undefined || r?.activo === null ? true : Boolean(r.activo);
+  const desdeMes = sanitizeMes(r?.desdeMes);
+  // No se usa sanitizeMes: convertiría la basura en 0 y "saltear" enero sin querer.
+  const salteados = Array.isArray(r?.salteados)
+    ? [...new Set(r.salteados.filter(m => Number.isInteger(m) && m >= 0 && m <= 11))]
+      .sort((a, b) => a - b)
+    : [];
+
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true, errors: [], data: { detalle, importe, categoria, medio, activo, desdeMes, salteados } };
+}
+
+/**
  * Validates an ingreso object.
  * @param {object} ing — raw form data (descripcion, importe, mes, tipo)
  * @returns {{ ok: boolean, errors: string[], data?: object }}
