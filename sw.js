@@ -15,6 +15,7 @@ const APP_SHELL = [
   '/gastos.js',
   '/ingresos.js',
   '/presupuesto.js',
+  '/recurrentes.js',
   '/store.js',
   '/ui.js',
   '/utils.js',
