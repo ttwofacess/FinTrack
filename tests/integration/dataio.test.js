@@ -253,4 +253,56 @@ describe('ida y vuelta exportar → importar', () => {
 
     expect(getStoredState().metaAhorro).toEqual({ tipo: 'porcentaje', valor: 25 });
   });
+  it('los recurrentes y el recurrenteId de sus gastos sobreviven al round-trip', async () => {
+    await bootApp(stateWith(s => {
+      s.recurrentes = [
+        { id: 'r1', detalle: 'Netflix', importe: 8500, categoria: 'suscripciones', medio: 'credito', activo: true, desdeMes: 0, salteados: [4] },
+      ];
+      s.selectedMonth = 0;
+    }));
+    // El recurrente genera su gasto al arrancar: es lo que tiene que volver.
+    expect(getStoredState().gastos[0].recurrenteId).toBe('r1');
+
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    byId('btn-export').click();
+    const exportado = JSON.parse(await readBlob(URL.createObjectURL.mock.calls[0][0]));
+    click.mockRestore();
+
+    byId('btn-reset-data').click();
+    expect(getStoredState().recurrentes).toEqual([]);
+
+    pickFile(jsonFile(JSON.stringify(exportado)));
+    await waitForToast('Datos importados');
+
+    expect(getStoredState().recurrentes).toEqual([
+      { id: 'r1', detalle: 'Netflix', importe: 8500, categoria: 'suscripciones', medio: 'credito', activo: true, desdeMes: 0, salteados: [4] },
+    ]);
+    expect(getStoredState().gastos[0].recurrenteId).toBe('r1');
+  });
+
+  it('un export viejo sin recurrentes se importa sin errores', async () => {
+    await bootApp();
+    const viejo = stateWith(s => { s.selectedMonth = 0; });
+    delete viejo.recurrentes;
+
+    pickFile(jsonFile(JSON.stringify(viejo)));
+    await waitForToast('Datos importados');
+
+    expect(getStoredState().recurrentes).toEqual([]);
+    expect(toastText()).not.toContain('❌');
+  });
+
+  it('rechaza el import si algún recurrente es inválido, sin pisar los datos', async () => {
+    await bootApp(estadoPropio());
+    const malo = stateWith(s => {
+      s.recurrentes = [{ id: 'r1', detalle: '', importe: 0, categoria: '' }];
+      s.selectedMonth = 0;
+    });
+
+    pickFile(jsonFile(JSON.stringify(malo)));
+    await waitForToast('recurrente(s) con datos inválidos');
+
+    expect(getStoredState().gastos[0].detalle).toBe('Alquiler importado');
+    expect(getStoredState().recurrentes).toEqual([]);
+  });
 });

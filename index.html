@@ -141,12 +141,14 @@
         <div class="header-sub">budget mensual</div>
       </div>
       <div class="pill" id="btn-edit-presup">editar</div>
+      <div class="pill" id="btn-new-recurrente" hidden>nuevo</div>
     </div>
     <div class="month-selector" id="presup-months"></div>
     <div class="tabs-row">
       <div class="tab-btn active" data-tab="fijos">Gastos Fijos</div>
       <div class="tab-btn" data-tab="variables">Variables</div>
       <div class="tab-btn" data-tab="ingresos">Ingresos</div>
+      <div class="tab-btn" data-tab="recurrentes">Recurrentes</div>
     </div>
     <div class="card" style="margin-top:8px">
       <div id="presup-content"></div>
@@ -239,6 +241,12 @@
           </select>
         </div>
       </div>
+      <div class="form-group" id="f-actualizar-base-group" hidden>
+        <label class="checkbox-label" for="f-actualizar-base">
+          <input type="checkbox" id="f-actualizar-base">
+          <span id="f-actualizar-base-label">Actualizar el importe base</span>
+        </label>
+      </div>
       <button class="btn-primary" id="btn-save-gasto">Guardar Gasto</button>
       <button class="btn-danger" id="btn-delete-gasto" style="display:none">Eliminar Gasto</button>
     </div>
@@ -330,6 +338,58 @@
         </div>
       </div>
       <button class="btn-primary" id="btn-save-meta">Guardar meta</button>
+    </div>
+  </div>
+
+  <!-- MODAL RECURRENTE -->
+  <!--
+    Los selects de categoría y mes los puebla recurrentes.js al abrir el modal,
+    igual que hace gastos.js con #f-categoria y #f-mes. El checkbox de "aplicar
+    al mes" sólo aparece en edición y sólo cuando ese mes ya tiene el gasto
+    generado.
+  -->
+  <div class="modal-overlay" id="modal-recurrente" role="dialog" aria-modal="true" aria-labelledby="recurrente-title">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="recurrente-title">Nuevo Recurrente</div>
+      <div class="form-group">
+        <label class="form-label" for="r-detalle">Detalle</label>
+        <input class="form-input" id="r-detalle" placeholder="ej: alquiler" type="text" maxlength="120">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="r-importe">Importe ($)</label>
+          <input class="form-input" id="r-importe" placeholder="0" type="number" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-desde">Desde el mes de</label>
+          <select class="form-select" id="r-desde"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="r-categoria">Categoría</label>
+          <select class="form-select" id="r-categoria"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-medio">Medio de Pago</label>
+          <select class="form-select" id="r-medio">
+            <option value="efectivo">Efectivo</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="r-aplicar-mes-group" hidden>
+        <label class="checkbox-label" for="r-aplicar-mes">
+          <input type="checkbox" id="r-aplicar-mes">
+          <span id="r-aplicar-mes-label">Aplicar también a este mes</span>
+        </label>
+      </div>
+      <button class="btn-primary" id="btn-save-recurrente">Guardar Recurrente</button>
+      <button class="btn-danger" id="btn-delete-recurrente" style="display:none">Eliminar Recurrente</button>
     </div>
   </div>
 

@@ -191,6 +191,43 @@ describe('openEditGasto', () => {
     openEditGasto('no-existe', stateWith([gasto({ id: 'g9' })]), noop, noop);
     expect(document.getElementById('modal-gasto').classList.contains('open')).toBe(false);
   });
+
+  describe('checkbox de importe base', () => {
+    const estadoConRecurrente = (gastos) => {
+      const s = stateWith(gastos);
+      s.recurrentes = [{ id: 'r1', detalle: 'Netflix', importe: 8500, categoria: 'suscripciones', medio: 'credito', activo: true, desdeMes: 0, salteados: [] }];
+      return s;
+    };
+
+    it('se muestra desmarcado al editar un gasto recurrente, con el nombre del recurrente', () => {
+      openEditGasto('g9', estadoConRecurrente([gasto({ id: 'g9', recurrenteId: 'r1' })]), noop, noop);
+
+      const group = document.getElementById('f-actualizar-base-group');
+      expect(group.hidden).toBe(false);
+      expect(document.getElementById('f-actualizar-base').checked).toBe(false);
+      expect(document.getElementById('f-actualizar-base-label').textContent).toContain('Netflix');
+    });
+
+    it('se oculta con un gasto manual', () => {
+      openEditGasto('g9', estadoConRecurrente([gasto({ id: 'g9' })]), noop, noop);
+
+      expect(document.getElementById('f-actualizar-base-group').hidden).toBe(true);
+    });
+
+    it('se oculta si el recurrente ya no existe', () => {
+      // El recurrente se puede borrar sin llevar sus gastos: el checkbox no
+      // puede ofrecer actualizar una base que ya no está.
+      openEditGasto('g9', stateWith([gasto({ id: 'g9', recurrenteId: 'r99' })]), noop, noop);
+
+      expect(document.getElementById('f-actualizar-base-group').hidden).toBe(true);
+    });
+
+    it('se oculta al crear un gasto nuevo', () => {
+      openNewGasto(estadoConRecurrente([]));
+
+      expect(document.getElementById('f-actualizar-base-group').hidden).toBe(true);
+    });
+  });
 });
 
 describe('initGastoModal', () => {
@@ -201,7 +238,9 @@ describe('initGastoModal', () => {
   };
 
   it('saves a valid gasto with a generated id and closes the modal', () => {
-    const onSave = vi.fn();
+    // El callback real devuelve si persistió; un mock que devuelve undefined
+    // significa "no se aplicó el cambio" y deja el modal abierto.
+    const onSave = vi.fn(() => true);
     initGastoModal(() => stateWith([]), onSave, noop);
 
     openNewGasto(stateWith([]));
@@ -264,6 +303,45 @@ describe('initGastoModal', () => {
     document.getElementById('btn-delete-gasto').click();
 
     expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  // La señal viaja aparte de validateGasto: el callback decide si el importe
+  // nuevo corre hacia los meses siguientes.
+  it('informa a onSave si se pidió actualizar el importe base', () => {
+    const onSave = vi.fn();
+    initGastoModal(() => stateWith([]), onSave, noop);
+
+    openNewGasto(stateWith([]));
+    fill({ 'f-detalle': 'Cafe', 'f-importe': '450', 'f-categoria': 'salidas', 'f-medio': 'efectivo' });
+    document.getElementById('f-actualizar-base').checked = true;
+    document.getElementById('btn-save-gasto').click();
+
+    expect(onSave.mock.calls[0][0]._actualizarBase).toBe(true);
+  });
+
+  it('deja el modal abierto si el callback no aplicó el cambio', () => {
+    // undefined = revalidación fallida en el callback: el modal no se cierra ni
+    // anuncia un "guardado" que no ocurrió.
+    const onSave = vi.fn();
+    initGastoModal(() => stateWith([]), onSave, noop);
+
+    openNewGasto(stateWith([]));
+    fill({ 'f-detalle': 'Cafe', 'f-importe': '450', 'f-categoria': 'salidas', 'f-medio': 'efectivo' });
+    document.getElementById('btn-save-gasto').click();
+
+    expect(document.getElementById('modal-gasto').classList.contains('open')).toBe(true);
+    expect(document.getElementById('toast').textContent).not.toContain('Gasto guardado');
+  });
+
+  it('informa a onSave que no se tocó el importe base si el checkbox quedó sin marcar', () => {
+    const onSave = vi.fn();
+    initGastoModal(() => stateWith([]), onSave, noop);
+
+    openNewGasto(stateWith([]));
+    fill({ 'f-detalle': 'Cafe', 'f-importe': '450', 'f-categoria': 'salidas', 'f-medio': 'efectivo' });
+    document.getElementById('btn-save-gasto').click();
+
+    expect(onSave.mock.calls[0][0]._actualizarBase).toBe(false);
   });
 });
 

@@ -162,6 +162,7 @@ export function openNewGasto(state) {
   document.getElementById('f-detalle').value         = '';
   document.getElementById('f-importe').value         = '';
   document.getElementById('btn-delete-gasto').style.display = 'none';
+  _syncActualizarBase(state, null);
   _populateGastoForm(state.selectedMonth);
   document.getElementById('modal-gasto').classList.add('open');
 }
@@ -174,11 +175,35 @@ export function openEditGasto(id, state, onSave, onDelete) {
   document.getElementById('f-detalle').value         = g.detalle;
   document.getElementById('f-importe').value         = g.importe;
   document.getElementById('btn-delete-gasto').style.display = 'block';
+  _syncActualizarBase(state, g);
   _populateGastoForm(state.selectedMonth);
   document.getElementById('f-mes').value      = g.mes;
   document.getElementById('f-categoria').value = g.categoria;
   document.getElementById('f-medio').value    = g.medio || 'efectivo';
   document.getElementById('modal-gasto').classList.add('open');
+}
+
+/**
+ * Muestra u oculta el checkbox "actualizar el importe base".
+ *
+ * Sólo aparece al editar un gasto recurrente, y arranca **desmarcado**: con
+ * inflación el importe de cada mes es el que se pagó ese mes, así que corregir
+ * un mes no debe arrastrar a los demás. Se marca a mano cuando el precio cambió
+ * de verdad (el alquiler renegociado, la suscripción que subió para todos).
+ */
+function _syncActualizarBase(state, gasto) {
+  const group = document.getElementById('f-actualizar-base-group');
+  const check = document.getElementById('f-actualizar-base');
+  const recurrente = gasto?.recurrenteId
+    ? state.recurrentes.find(r => r.id === gasto.recurrenteId)
+    : null;
+
+  group.hidden = !recurrente;
+  check.checked = false;
+  if (recurrente) {
+    document.getElementById('f-actualizar-base-label').textContent =
+      `Actualizar el importe base · ${recurrente.detalle} (meses siguientes)`;
+  }
 }
 
 function _populateGastoForm(selectedMonth) {
@@ -201,6 +226,8 @@ export function initGastoModal(getState, onSave, onDelete) {
       mes       : document.getElementById('f-mes').value,
       categoria : document.getElementById('f-categoria').value,
       medio     : document.getElementById('f-medio').value,
+      // Sólo llega con gasto recurrente: sin recurrenteId el callback lo ignora.
+      _actualizarBase: document.getElementById('f-actualizar-base').checked,
     };
 
     const result = validateGasto(raw);
@@ -211,9 +238,15 @@ export function initGastoModal(getState, onSave, onDelete) {
 
     const gasto = result.data;
     const wasEdit = Boolean(editingGastoId);
+    // `_actualizarBase` no pasa por validateGasto: es una señal del formulario,
+    // no un campo del gasto, así que viaja aparte.
     const persisted = wasEdit
-      ? onSave({ ...gasto, id: editingGastoId, _edit: true })
-      : onSave({ ...gasto, id: uid(), _edit: false });
+      ? onSave({ ...gasto, id: editingGastoId, _edit: true, _actualizarBase: raw._actualizarBase })
+      : onSave({ ...gasto, id: uid(), _edit: false, _actualizarBase: raw._actualizarBase });
+    // undefined = el callback no aplicó el cambio (revalidación fallida): el
+    // modal sigue abierto y no se anuncia un "guardado" que no ocurrió.
+    if (persisted === undefined) return;
+
     closeModals();
     // Un "✓ guardado" cuando localStorage falló sería una mentira: el cambio
     // se queda sólo en memoria y se pierde al cerrar.

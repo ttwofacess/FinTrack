@@ -36,6 +36,7 @@ export function mountGastosDom() {
     <input id="f-medio">
     <select id="f-mes"></select>
     <select id="f-categoria"></select>
+    <div id="f-actualizar-base-group" hidden><input type="checkbox" id="f-actualizar-base"><span id="f-actualizar-base-label"></span></div>
     <button id="btn-save-gasto"></button>
     <button id="btn-delete-gasto"></button>
   `;

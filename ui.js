@@ -93,12 +93,17 @@ export function syncAllMonthSelectors(selectedMonth) {
 export function gastoItemHTML(g, catInfoFn, fmtFn) {
   const ci = catInfoFn(g.categoria);
   const medioLabel = g.medio === 'credito' ? '💳 crédito' : (g.medio || 'efectivo');
+  // El ↻ marca lo autogenerado: avisa de dos cosas a la vez, que el gasto se
+  // repite solo y que editarlo actualiza el importe base del recurrente. Va
+  // junto a la categoría y no al final para que siga visible cuando la línea
+  // se recorta en pantallas angostas.
+  const recurrente = g.recurrenteId ? ' ↻' : '';
 
   return html`<div class="gasto-item" data-id="${g.id}">
     <div class="gasto-icon" style="background:${ci.color}22">${ci.icon}</div>
     <div class="gasto-info">
       <div class="gasto-name">${g.detalle}</div>
-      <div class="gasto-meta">${ci.label} · ${medioLabel}</div>
+      <div class="gasto-meta">${ci.label}${recurrente} · ${medioLabel}</div>
     </div>
     <div class="gasto-amount" style="color:${ci.color}">${fmtFn(g.importe)}</div>
   </div>`;

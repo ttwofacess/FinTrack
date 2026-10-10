@@ -10,6 +10,7 @@ import {
   validateBudgetUpdate, validateMetaAhorro, html
 } from './utils.js';
 import { buildMonthSelector, showToast, toastSinPersistencia, closeModals } from './ui.js';
+import { renderRecurrentes, openEditRecurrente } from './recurrentes.js';
 
 let presupTab = 'fijos';
 
@@ -17,8 +18,11 @@ let presupTab = 'fijos';
  * @param {object}   state
  * @param {Function} onMonthChange
  * @param {Function} onBudgetSave  — (mi, budgetsParciales) => void
+ * @param {Function} [onRecurrenteToggle] — (id) => void, switch de la pestaña
+ *   Recurrentes. Es opcional para que los tests de la pantalla puedan montar el
+ *   render sin la lista de recurrentes.
  */
-export function renderPresupuesto(state, onMonthChange, onBudgetSave) {
+export function renderPresupuesto(state, onMonthChange, onBudgetSave, onRecurrenteToggle) {
   const mi = state.selectedMonth;
   buildMonthSelector('presup-months', mi, onMonthChange);
 
@@ -29,8 +33,13 @@ export function renderPresupuesto(state, onMonthChange, onBudgetSave) {
   // El tab de ingresos es sólo lectura: los ingresos se cargan desde su propia
   // pantalla. Dejar el botón "editar" a la vista era un control que no hacía
   // nada, porque openEditPresup() no tiene categorías que editar en ese tab.
+  // En Recurrentes tampoco hay budgets que editar: los recurrentes se crean con
+  // su propio botón del header.
   const editBtn = document.getElementById('btn-edit-presup');
-  if (editBtn) editBtn.hidden = presupTab === 'ingresos';
+  if (editBtn) editBtn.hidden = presupTab === 'ingresos' || presupTab === 'recurrentes';
+
+  const newBtn = document.getElementById('btn-new-recurrente');
+  if (newBtn) newBtn.hidden = presupTab !== 'recurrentes';
 
   const budgets = state.budgets[mi] || {};
   const cats    = presupTab === 'fijos' ? CAT_FIJOS : presupTab === 'variables' ? CAT_VARIABLES : null;
@@ -38,6 +47,10 @@ export function renderPresupuesto(state, onMonthChange, onBudgetSave) {
 
   if (presupTab === 'ingresos') {
     _renderIngresosTab(mi, state, el);
+    return;
+  }
+  if (presupTab === 'recurrentes') {
+    renderRecurrentes(state, onRecurrenteToggle || (() => {}), (id) => openEditRecurrente(id, state));
     return;
   }
   _renderBudgetTab(cats, budgets, mi, state, el);
@@ -137,21 +150,21 @@ export function openEditPresup(state, onBudgetSave) {
 }
 
 /** Registra listeners de tabs y botón editar (llamar una sola vez en init) */
-export function initPresupuestoEvents(getState, onMonthChange, onBudgetSave) {
+export function initPresupuestoEvents(getState, onMonthChange, onBudgetSave, onRecurrenteToggle) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       presupTab = btn.dataset.tab;
-      renderPresupuesto(getState(), onMonthChange, onBudgetSave);
+      renderPresupuesto(getState(), onMonthChange, onBudgetSave, onRecurrenteToggle);
     });
   });
 
   document.getElementById('btn-edit-presup').addEventListener('click', () => {
-    // Defensa: el botón está oculto en el tab de ingresos, pero un click
-    // disparado por código lo alcanzaría igual.
-    if (presupTab === 'ingresos') return;
+    // Defensa: el botón está oculto en los tabs de ingresos y recurrentes, pero
+    // un click disparado por código lo alcanzaría igual.
+    if (presupTab === 'ingresos' || presupTab === 'recurrentes') return;
     openEditPresup(getState(), (mi, updates) => {
       const persisted = onBudgetSave(mi, updates);
-      renderPresupuesto(getState(), onMonthChange, onBudgetSave);
+      renderPresupuesto(getState(), onMonthChange, onBudgetSave, onRecurrenteToggle);
       return persisted;
     });
   });

@@ -15,5 +15,5 @@
 }
 .gasto-info { flex: 1; min-width: 0; }
 .gasto-name { font-size: 0.88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gasto-meta { font-size: 0.68rem; font-family: var(--mono); color: var(--text2); margin-top: 2px; }
+.gasto-meta { font-size: 0.68rem; font-family: var(--mono); color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gasto-amount { font-size: 0.9rem; font-weight: 700; font-family: var(--mono); flex-shrink: 0; }

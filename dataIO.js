@@ -6,7 +6,7 @@
 
 import { CUR_YEAR } from './constants.js';
 import { showToast, toastSinPersistencia } from './ui.js';
-import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro } from './utils.js';
+import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro, validateRecurrente } from './utils.js';
 import { normalizeState } from './store.js';
 
 /**
@@ -64,6 +64,19 @@ function validateImportedState(data) {
   });
   if (badIngresos > 0) {
     errors.push(`${badIngresos} ingreso(s) con datos inválidos fueron encontrados.`);
+  }
+
+  // Validate recurrentes. Un export anterior a esta feature no los trae y eso es
+  // válido: normalizeState ya dejó el array vacío.
+  let badRecurrentes = 0;
+  normalized.recurrentes = normalized.recurrentes.map(r => {
+    const r2 = validateRecurrente(r);
+    if (!r2.ok) { badRecurrentes++; return r; }
+    // data trae la forma completa, así que conserva el id del archivo.
+    return { ...r, ...r2.data };
+  });
+  if (badRecurrentes > 0) {
+    errors.push(`${badRecurrentes} recurrente(s) con datos inválidos fueron encontrados.`);
   }
 
   // Validate budgets

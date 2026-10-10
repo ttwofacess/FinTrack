@@ -167,6 +167,49 @@ describe('importData', () => {
     expect(data.metaAhorro).toEqual({ tipo: 'porcentaje', valor: 0 });
   });
 
+  it('accepts a state exported before recurrentes existed', async () => {
+    const state = defaultState();
+    delete state.recurrentes;
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.recurrentes).toEqual([]);
+  });
+
+  it('keeps valid recurrentes and their ids', async () => {
+    const state = defaultState();
+    state.recurrentes = [
+      { id: 'r1', detalle: 'Netflix', importe: 8500, categoria: 'suscripciones', medio: 'credito', activo: true, desdeMes: 3, salteados: [2] },
+    ];
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.recurrentes[0]).toEqual({
+      id: 'r1', detalle: 'Netflix', importe: 8500, categoria: 'suscripciones',
+      medio: 'credito', activo: true, desdeMes: 3, salteados: [2],
+    });
+  });
+
+  it('normalises a string importe in recurrentes so the base is calculable', async () => {
+    const state = defaultState();
+    state.recurrentes = [
+      { id: 'r1', detalle: 'Alquiler', importe: '250.000,00', categoria: 'vivienda', medio: 'transferencia' },
+    ];
+
+    const { called, data } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(true);
+    expect(data.recurrentes[0].importe).toBe(250000);
+  });
+
+  it('rejects recurrentes with invalid data', async () => {
+    const state = defaultState();
+    state.recurrentes = [{ id: 'r1', detalle: '', importe: -5, categoria: '', medio: 'credito' }];
+
+    const { called } = await runImport(jsonFile(JSON.stringify(state)));
+    expect(called).toBe(false);
+    expect(toastText()).toContain('recurrente(s) con datos inválidos');
+  });
+
   it('keeps a valid metaAhorro on import', async () => {
     const state = defaultState();
     state.metaAhorro = { tipo: 'porcentaje', valor: 20 };

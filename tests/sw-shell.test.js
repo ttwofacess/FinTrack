@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, sep } from 'node:path';
+import { createHash } from 'node:crypto';
 
 /**
  * Guard del APP_SHELL del service worker.
@@ -19,6 +20,28 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const swSource = readFileSync(join(ROOT, 'sw.js'), 'utf8');
 
 const shellEntry = (path) => swSource.includes(`'/${path}'`);
+
+/** Las entradas del APP_SHELL, en el orden en que están escritas en sw.js. */
+const shellEntries = () => {
+  const bloque = swSource.slice(swSource.indexOf('APP_SHELL'), swSource.indexOf('];'));
+  return [...bloque.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+};
+
+/**
+ * Huella del contenido del shell.
+ *
+ * sw.js deriva el nombre de la caché de este valor: si cambia un archivo del
+ * shell, cambia el nombre y los clientes dejan de servir el versión vieja. El
+ * hash tiene que ser estable (mismo contenido → mismo hash) y cambiar con
+ * cualquier byte de cualquier archivo.
+ */
+const shellHash = () => createHash('sha256')
+  .update(shellEntries().map((entry) => {
+    const file = entry === '/' ? 'index.html' : entry.slice(1);
+    return `${entry}:${readFileSync(join(ROOT, file))}`;
+  }).join('\n'))
+  .digest('hex')
+  .slice(0, 12);
 
 /**
  * Raíces .js que no son módulos de la app y por lo tanto no van en el shell:
@@ -41,8 +64,16 @@ const hojasDeEstilo = (dir = join(ROOT, 'styles')) =>
   });
 
 describe('sw.js — APP_SHELL', () => {
-  it('tiene una versión con el formato fintrack-vN', () => {
-    expect(swSource).toMatch(/const CACHE_NAME = 'fintrack-v\d+';/);
+  it('deriva el nombre de la caché del hash del shell', () => {
+    expect(swSource).toMatch(/const CACHE_NAME = `fintrack-\$\{SHELL_HASH\}`;/);
+  });
+
+  it('el hash declarado es el del contenido actual del shell', () => {
+    // Si tocaste un archivo del shell, el hash quedó viejo: el service worker
+    // no reinstala y los clientes se quedan con el código anterior.
+    const esperado = shellHash();
+    const declarado = swSource.match(/const SHELL_HASH = '([^']+)'/)?.[1];
+    expect(declarado, `actualizá SHELL_HASH a '${esperado}' en sw.js`).toBe(esperado);
   });
 
   it('cachea todos los módulos de la app', () => {
@@ -56,8 +87,7 @@ describe('sw.js — APP_SHELL', () => {
   });
 
   it('no lista dos veces la misma entrada', () => {
-    const bloque = swSource.slice(swSource.indexOf('APP_SHELL'), swSource.indexOf('];'));
-    const entradas = [...bloque.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const entradas = shellEntries();
     expect(entradas).toHaveLength(new Set(entradas).size);
   });
 });

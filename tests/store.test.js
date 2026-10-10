@@ -13,6 +13,7 @@ describe('defaultState', () => {
     const s = defaultState();
     expect(s.gastos).toEqual([]);
     expect(s.ingresos).toEqual([]);
+    expect(s.recurrentes).toEqual([]);
   });
 
   it('creates a budget entry for all 12 months', () => {
@@ -46,9 +47,11 @@ describe('defaultState', () => {
     const a = defaultState();
     const b = defaultState();
     a.gastos.push({ id: 'x' });
+    a.recurrentes.push({ id: 'r' });
     a.budgets[0].vivienda = 999;
     a.metaAhorro.valor = 50;
     expect(b.gastos).toEqual([]);
+    expect(b.recurrentes).toEqual([]);
     expect(b.budgets[0].vivienda).toBe(0);
     expect(b.metaAhorro.valor).toBe(0);
     // Tampoco se comparte la referencia con la constante de defaults.
@@ -159,6 +162,109 @@ describe('normalizeState', () => {
     expect(DEFAULT_META_AHORRO.valor).toBe(0);
     expect(normalizeState({}).metaAhorro.valor).toBe(0);
   });
+
+  // ── recurrentes ────────────────────────────────────────────
+
+  it('adds an empty recurrentes array to a state saved before the feature', () => {
+    const s = normalizeState({ gastos: [], ingresos: [], budgets: {} });
+    expect(s.recurrentes).toEqual([]);
+  });
+
+  it('replaces a non-array recurrentes with an empty array', () => {
+    expect(normalizeState({ recurrentes: null }).recurrentes).toEqual([]);
+    expect(normalizeState({ recurrentes: 'nada' }).recurrentes).toEqual([]);
+    expect(normalizeState({ recurrentes: 42 }).recurrentes).toEqual([]);
+    expect(normalizeState({ recurrentes: {} }).recurrentes).toEqual([]);
+  });
+
+  it('drops entries that are not objects', () => {
+    const s = normalizeState({ recurrentes: [null, 'Netflix', 3, ['a'], { id: 'r1' }] });
+    expect(s.recurrentes).toHaveLength(1);
+    expect(s.recurrentes[0].id).toBe('r1');
+  });
+
+  it('preserves a valid recurrente untouched', () => {
+    const r = {
+      id: 'abc123', detalle: 'Netflix', importe: 8500, categoria: 'suscripciones',
+      medio: 'credito', activo: true, desdeMes: 9, salteados: [3],
+    };
+    expect(normalizeState({ recurrentes: [r] }).recurrentes[0]).toEqual(r);
+  });
+
+  it('fills the defaults of an incomplete recurrente', () => {
+    const s = normalizeState({ recurrentes: [{ id: 'r1' }] });
+    expect(s.recurrentes[0]).toEqual({
+      id: 'r1',
+      detalle: '',
+      importe: 0,
+      categoria: '',
+      medio: 'efectivo',
+      activo: true,
+      desdeMes: 0,
+      salteados: [],
+    });
+  });
+
+  it('generates a deterministic id when missing', () => {
+    const s = normalizeState({ recurrentes: [{ detalle: 'Alquiler' }, { detalle: 'Luz' }] });
+    expect(s.recurrentes[0].id).toBe('rec-0');
+    expect(s.recurrentes[1].id).toBe('rec-1');
+  });
+
+  it('sanitises the detalle text', () => {
+    const s = normalizeState({ recurrentes: [{ id: 'r1', detalle: '  Gimnasio  会所 ' }] });
+    expect(s.recurrentes[0].detalle).toBe('Gimnasio 会所');
+    expect(normalizeState({ recurrentes: [{ id: 'r1', detalle: 42 }] }).recurrentes[0].detalle).toBe('');
+  });
+
+  it('coerces the importe to a non-negative number', () => {
+    const expect0 = (importe) =>
+      expect(normalizeState({ recurrentes: [{ id: 'r1', importe }] }).recurrentes[0].importe).toBe(0);
+
+    expect(normalizeState({ recurrentes: [{ id: 'r1', importe: '8.500,00' }] }).recurrentes[0].importe).toBe(8500);
+    expect(normalizeState({ recurrentes: [{ id: 'r1', importe: '8500,50' }] }).recurrentes[0].importe).toBe(8500.5);
+    expect0(-100);
+    expect0('abc');
+    expect0(undefined);
+    expect0(Infinity);
+    // El formato ambiguo "250.000" se rechaza en utils: acá cae al 0.
+    expect0('8.500');
+  });
+
+  it('coerces activo to a boolean, defaulting to true', () => {
+    const activo = (v) => normalizeState({ recurrentes: [{ id: 'r1', activo: v }] }).recurrentes[0].activo;
+    expect(activo(undefined)).toBe(true);
+    expect(activo(null)).toBe(true);
+    expect(activo(false)).toBe(false);
+    expect(activo(true)).toBe(true);
+    expect(activo(0)).toBe(false);
+    expect(activo(1)).toBe(true);
+  });
+
+  it('clamps desdeMes to a valid month index', () => {
+    const desde = (v) => normalizeState({ recurrentes: [{ id: 'r1', desdeMes: v }] }).recurrentes[0].desdeMes;
+    expect(desde(undefined)).toBe(0);
+    expect(desde(9)).toBe(9);
+    expect(desde('9')).toBe(9);
+    expect(desde(-3)).toBe(0);
+    expect(desde(15)).toBe(11);
+  });
+
+  it('keeps only valid, unique salteados', () => {
+    const s = normalizeState({ recurrentes: [{ id: 'r1', salteados: [3, 3, 0, 11, -1, 12, 'x', null, 2.5] }] });
+    expect(s.recurrentes[0].salteados).toEqual([0, 3, 11]);
+  });
+
+  it('replaces a non-array salteados with an empty array', () => {
+    expect(normalizeState({ recurrentes: [{ id: 'r1', salteados: 'nada' }] }).recurrentes[0].salteados).toEqual([]);
+    expect(normalizeState({ recurrentes: [{ id: 'r1', salteados: null }] }).recurrentes[0].salteados).toEqual([]);
+  });
+
+  it('is idempotent over recurrentes', () => {
+    const once = normalizeState({ recurrentes: [{ detalle: '  Alquiler ' }, null, 'x', { id: 'r1', importe: -1 }] });
+    const twice = normalizeState(JSON.parse(JSON.stringify(once)));
+    expect(twice).toEqual(once);
+  });
 });
 
 describe('setState / getState', () => {
@@ -234,5 +340,20 @@ describe('setState / getState', () => {
     const s = getState();
     expect(s.selectedMonth).toBeUndefined();
     expect(s.budgets).toBeDefined();
+    expect(s.recurrentes).toEqual([]);
+  });
+
+  it('round-trips recurrentes through storage', () => {
+    const s = defaultState();
+    s.recurrentes.push({ id: 'r1', detalle: 'Netflix', importe: 8500, categoria: 'suscripciones', medio: 'credito', activo: true, desdeMes: 9, salteados: [3] });
+    setState(s);
+
+    const loaded = getState();
+    expect(loaded.recurrentes).toEqual(s.recurrentes);
+  });
+
+  it('normalises corrupt recurrentes read back from storage', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ gastos: [], ingresos: [], recurrentes: 'basura' }));
+    expect(getState().recurrentes).toEqual([]);
   });
 });
