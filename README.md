@@ -54,6 +54,19 @@ pnpm test:watch           # modo watch
 pnpm test:coverage        # reporte de cobertura en coverage/
 ```
 
+### 📦 Publicar una actualización
+
+La PWA sirve el código desde una caché, así que **deployar no alcanza**: si el contenido no cambia, los clientes siguen con la versión anterior.
+
+El nombre de esa caché se deriva de un hash del contenido del shell (`SHELL_HASH` en `sw.js`). Cuando tocás un `.js`, un `.css`, el `index.html` o cualquier icono, corré los tests: `tests/sw-shell.test.js` falla y te dice el valor nuevo para pegar.
+
+```
+FAIL  el hash declarado es el del contenido actual del shell
+      actualizá SHELL_HASH a '8aacc4570f08' en sw.js
+```
+
+Sin ese paso, el service worker no reinstala y la app instalada sigue mostrando la versión vieja.
+
 ## 🛠️ Tecnologías Utilizadas
 
 - **HTML5**: Estructura semántica.

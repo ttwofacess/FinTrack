@@ -1,4 +1,16 @@
-const CACHE_NAME = 'fintrack-v8';
+// El nombre de la caché es un hash del contenido del shell, no un número que
+// alguien tiene que acordarse de subir.
+//
+// El fetch de los módulos y las hojas es cache-first: si el nombre no cambia,
+// un cliente que ya visité la app sigue sirviendo el código viejo para siempre,
+// aunque sw.js se vuelva a descargar. Con el hash, cambiar cualquier archivo
+// del shell cambia el nombre de la caché solo, el service worker reinstala y el
+// activate borra la caché anterior.
+//
+// tests/sw-shell.test.js recalcula el hash y falla si no coincide: cuando
+// touched, corré el test y copiá el valor que imprime.
+const SHELL_HASH = 'c047db723c33';
+const CACHE_NAME = `fintrack-${SHELL_HASH}`;
 
 const APP_SHELL = [
   '/',
