@@ -164,23 +164,30 @@ export function renderRecurrentes(state, onToggle, onEdit) {
   const el = document.getElementById('presup-content');
   if (!el) return;
 
+  const mi = state.selectedMonth;
   const recs = state.recurrentes || [];
   const activos = recs.filter(r => r.activo);
   const total   = activos.reduce((s, r) => s + (r.importe || 0), 0);
-  const cargadosEnMes = state.gastos.filter(g => g.mes === state.selectedMonth).length;
+  const cargadosEnMes = state.gastos.filter(g => g.mes === mi).length;
 
+  // El total es de TODOS los recurrentes, no del mes visible: decir "por mes"
+  // junto a un selector en enero hacía leer Netflix como parte de enero. Se
+  // desambigua con el sub, que sí es del mes, y con el aviso por fila de los
+  // que todavía no arrancan.
   const resumen = html`<div class="recurrentes-resumen">
       <div class="recurrentes-total">${fmt(total)} <span>por mes</span></div>
-      <div class="recurrentes-sub">${activos.length} activo${activos.length === 1 ? '' : 's'} de ${recs.length} · ${cargadosEnMes} gasto${cargadosEnMes === 1 ? '' : 's'} en ${MESES[state.selectedMonth]}</div>
+      <div class="recurrentes-sub">total de los ${recs.length} recurrente${recs.length === 1 ? '' : 's'} · ${activos.length} activo${activos.length === 1 ? '' : 's'} · ${cargadosEnMes} gasto${cargadosEnMes === 1 ? '' : 's'} en ${MESES[mi]}</div>
     </div>`;
 
   const filas = recs.map(r => {
     const ci = catInfo(r.categoria);
+    const desdeMes = Number.isInteger(r.desdeMes) ? r.desdeMes : 0;
+    const aunNo = desdeMes > mi ? ` · todavía no aplica en ${MESES[mi]}` : '';
     return html`<div class="presup-item recurrente-item ${r.activo ? '' : 'recurrente-pausado'}" data-id="${r.id}">
       <div class="presup-icon" style="background:${ci.color}22">${ci.icon}</div>
       <div class="presup-info">
         <div class="presup-name">${r.detalle}</div>
-        <div class="presup-sub">${ci.label} · desde ${MESES[r.desdeMes] || 'Enero'}</div>
+        <div class="presup-sub">${ci.label} · desde ${MESES[desdeMes]}${aunNo}</div>
       </div>
       <div class="presup-right">
         <div class="presup-real">${fmt(r.importe)}</div>

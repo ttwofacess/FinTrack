@@ -524,7 +524,7 @@ describe('la pestaña Recurrentes', () => {
     expect(byId('btn-edit-presup').hidden).toBe(true);
   });
 
-  it('lista los recurrentes con su importe base y el resumen del mes', async () => {
+  it('lista los recurrentes con su importe base y el resumen', async () => {
     await bootApp(estadoBase((s) => {
       s.recurrentes = [
         recurrente(),
@@ -537,7 +537,39 @@ describe('la pestaña Recurrentes', () => {
     expect(filaPorNombre('Netflix').textContent).toContain('desde Enero');
     expect(filaPorNombre('Alquiler').className).toContain('recurrente-pausado');
     expect($('#presup-content .recurrentes-total').textContent).toContain('$8.500');
-    expect($('#presup-content .recurrentes-sub').textContent).toContain('1 activo de 2');
+    expect($('#presup-content .recurrentes-sub').textContent).toContain('total de los 2 recurrentes');
+    expect($('#presup-content .recurrentes-sub').textContent).toContain('1 activo');
+  });
+
+  it('aclara que el total es de todos los recurrentes, no del mes visible', async () => {
+    // Confundir el total global con el mes en pantalla hacía leer Netflix como
+    // parte de enero, cuando arrancaba en febrero.
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [
+        recurrente({ id: 'g1', detalle: 'Gas', importe: 7500, categoria: 'servicios', medio: 'debito' }),
+        recurrente({ id: 'r2', detalle: 'Netflix', importe: 2500, desdeMes: 1 }),
+      ];
+      s.gastos = [{ id: 'x', detalle: 'Gas', importe: 7500, mes: 0, categoria: 'servicios', recurrenteId: 'g1' }];
+    }));
+    abrirPestana();
+
+    expect($('#presup-content .recurrentes-sub').textContent).toContain('total de los 2 recurrentes');
+    expect($('#presup-content .recurrentes-sub').textContent).toContain('1 gasto en Enero');
+    // Y la fila que todavía no arranca lo dice explícito.
+    expect(filaPorNombre('Netflix').textContent).toContain('desde Febrero');
+    expect(filaPorNombre('Netflix').textContent).toContain('todavía no aplica en Enero');
+    expect(filaPorNombre('Gas').textContent).not.toContain('todavía no aplica');
+  });
+
+  it('deja de avisar cuando el mes visible es posterior al inicio', async () => {
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [recurrente()];
+      s.selectedMonth = 3;
+    }));
+    abrirPestana();
+
+    expect(filaPorNombre('Netflix').textContent).toContain('desde Enero');
+    expect(filaPorNombre('Netflix').textContent).not.toContain('todavía no aplica');
   });
 
   it('muestra un estado vacío cuando no hay recurrentes', async () => {
