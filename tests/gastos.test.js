@@ -238,7 +238,9 @@ describe('initGastoModal', () => {
   };
 
   it('saves a valid gasto with a generated id and closes the modal', () => {
-    const onSave = vi.fn();
+    // El callback real devuelve si persistió; un mock que devuelve undefined
+    // significa "no se aplicó el cambio" y deja el modal abierto.
+    const onSave = vi.fn(() => true);
     initGastoModal(() => stateWith([]), onSave, noop);
 
     openNewGasto(stateWith([]));
@@ -315,6 +317,20 @@ describe('initGastoModal', () => {
     document.getElementById('btn-save-gasto').click();
 
     expect(onSave.mock.calls[0][0]._actualizarBase).toBe(true);
+  });
+
+  it('deja el modal abierto si el callback no aplicó el cambio', () => {
+    // undefined = revalidación fallida en el callback: el modal no se cierra ni
+    // anuncia un "guardado" que no ocurrió.
+    const onSave = vi.fn();
+    initGastoModal(() => stateWith([]), onSave, noop);
+
+    openNewGasto(stateWith([]));
+    fill({ 'f-detalle': 'Cafe', 'f-importe': '450', 'f-categoria': 'salidas', 'f-medio': 'efectivo' });
+    document.getElementById('btn-save-gasto').click();
+
+    expect(document.getElementById('modal-gasto').classList.contains('open')).toBe(true);
+    expect(document.getElementById('toast').textContent).not.toContain('Gasto guardado');
   });
 
   it('informa a onSave que no se tocó el importe base si el checkbox quedó sin marcar', () => {

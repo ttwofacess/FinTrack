@@ -110,6 +110,21 @@ export function registrarSalteo(state, gasto) {
 }
 
 /**
+ * Los gastos generados de un recurrente que quedarían fuera si su `desdeMes`
+ * se corre a `desdeMes`, **sin tocar el estado**.
+ *
+ * Sólo se tienen en cuenta los **intactos**: los que el usuario editó a mano
+ * (`editado`) son un gasto real que decidió tener, y borrarlos sin permiso
+ * sería perder información.
+ *
+ * @returns {object[]} los gastos que se eliminarían, en el orden del estado
+ */
+export function gastosAntesDe(state, recurrenteId, desdeMes) {
+  if (!state || !recurrenteId || !Array.isArray(state.gastos)) return [];
+  return state.gastos.filter(g => g.recurrenteId === recurrenteId && g.mes < desdeMes && !g.editado);
+}
+
+/**
  * Borra los gastos generados de un recurrente que quedaron antes de su nuevo
  * `desdeMes`.
  *
@@ -117,24 +132,21 @@ export function registrarSalteo(state, gasto) {
  * aplicaba a esos meses, así que los gastos que se generaron ahí por error no
  * deberían seguir sumando al balance de enero a mayo.
  *
- * Sólo se borran los **intactos**: los que el usuario editó a mano (`editado`)
- * son un gasto real que decidió tener, y borrarlos sin permiso sería perder
- * información. Los meses que quedan vacíos no hacen falta registrarlos como
- * salteados, porque con `desdeMes` corrido `ensureMonthRecurrentes` ya no los
- * vuelve a generar.
+ * Los meses que quedan vacíos no hace falta registrarlos como salteados, porque
+ * con `desdeMes` corrido `ensureMonthRecurrentes` ya no los vuelve a generar.
+ *
+ * El caller tiene que preguntar confirmación **antes** de llamar a esta función:
+ * borrar gastos ya registrados no es una decisión que deba tomarse en
+ * silencio.
  *
  * @returns {number} cuántos gastos se borraron
  */
 export function recortarMesesAntes(state, recurrenteId, desdeMes) {
-  if (!state || !recurrenteId || !Array.isArray(state.gastos)) return 0;
+  const aBorrar = gastosAntesDe(state, recurrenteId, desdeMes);
+  if (aBorrar.length === 0) return 0;
 
-  const antes = state.gastos.filter(g =>
-    g.recurrenteId === recurrenteId && g.mes < desdeMes && !g.editado
-  );
-  if (antes.length === 0) return 0;
-
-  state.gastos = state.gastos.filter(g => !antes.includes(g));
-  return antes.length;
+  state.gastos = state.gastos.filter(g => !aBorrar.includes(g));
+  return aBorrar.length;
 }
 
 // ── Pantalla ───────────────────────────────────────────────
@@ -315,6 +327,13 @@ export function initRecurrentesModal(getState, onSave, onDelete) {
     };
 
     const persisted = onSave(rec);
+
+    // El callback devuelve undefined cuando no aplicó el cambio: validación
+    // fallida o un "no" en la confirmación de borrado. En ese caso el modal
+    // sigue abierto con lo que el usuario escribió y no se muestra ningún
+    // "guardado", que sería falso.
+    if (persisted === undefined) return;
+
     closeModals();
     if (persisted === false) toastSinPersistencia(wasEdit ? 'Recurrente' : 'Recurrente nuevo');
     else showToast(wasEdit ? '✓ Recurrente actualizado' : '✓ Recurrente guardado');

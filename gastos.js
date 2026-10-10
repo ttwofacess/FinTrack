@@ -243,6 +243,10 @@ export function initGastoModal(getState, onSave, onDelete) {
     const persisted = wasEdit
       ? onSave({ ...gasto, id: editingGastoId, _edit: true, _actualizarBase: raw._actualizarBase })
       : onSave({ ...gasto, id: uid(), _edit: false, _actualizarBase: raw._actualizarBase });
+    // undefined = el callback no aplicó el cambio (revalidación fallida): el
+    // modal sigue abierto y no se anuncia un "guardado" que no ocurrió.
+    if (persisted === undefined) return;
+
     closeModals();
     // Un "✓ guardado" cuando localStorage falló sería una mentira: el cambio
     // se queda sólo en memoria y se pierde al cerrar.

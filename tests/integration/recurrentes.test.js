@@ -308,23 +308,83 @@ describe('correr el "desde" de un recurrente', () => {
     submitGasto(campos);
   };
 
-  it('borra los gastos generados antes del nuevo "desde"', async () => {
+  it('pide confirmación antes de borrar los gastos anteriores al nuevo "desde"', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     await bootApp(conMesesGenerados());
 
     await editarDesde('Netflix', { detalle: 'Netflix', desde: 5 });
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    // El cartel dice qué se va y de cuándo, no sólo cuántos.
+    expect(confirm.mock.calls[0][0]).toContain('5 gastos');
+    expect(confirm.mock.calls[0][0]).toContain('Enero, Febrero, Marzo y 2 más');
+    expect(confirm.mock.calls[0][0]).toContain('¿Continuar?');
 
     expect(getStoredState().recurrentes[0].desdeMes).toBe(5);
     expect(getStoredState().gastos.map(g => g.mes)).toEqual([5, 6]);
     expect(toastText()).toContain('5 gastos anteriores eliminados');
+    confirm.mockRestore();
+  });
+
+  it('si se cancela la confirmación no se aplica ningún cambio', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await bootApp(conMesesGenerados());
+
+    await editarDesde('Netflix', { detalle: 'Netflix', importe: 9500, desde: 5 });
+
+    // Ni el recurrente ni los gastos se tocan.
+    expect(getStoredState().recurrentes[0].desdeMes).toBe(0);
+    expect(getStoredState().recurrentes[0].importe).toBe(8500);
+    expect(getStoredState().gastos).toHaveLength(7);
+    expect(toastText()).not.toContain('Recurrente guardado');
+    confirm.mockRestore();
+  });
+
+  it('al cancelar el modal sigue abierto con lo que se escribió', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await bootApp(conMesesGenerados());
+
+    navTo('presupuesto');
+    tab('recurrentes');
+    abrirRecurrente('Netflix');
+    byId('r-desde').value = '5';
+    submitRecurrente({ detalle: 'Netflix', importe: 9500 });
+
+    expect(byId('modal-recurrente').classList.contains('open')).toBe(true);
+    expect(byId('r-importe').value).toBe('9500');
+    expect(toastText()).not.toContain('✓');
+    confirm.mockRestore();
+  });
+
+  it('no pregunta cuando no hay nada que borrar', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    // El recurrente ya arrancaba en junio: sólo quedan junio y julio.
+    await bootApp(estadoBase((s) => {
+      s.recurrentes = [recurrente({ desdeMes: 5 })];
+      s.gastos = [5, 6].map(mi => ({
+        id: `g${mi}`, detalle: 'Netflix', importe: 8500, mes: mi,
+        categoria: 'suscripciones', recurrenteId: 'r1',
+      }));
+    }));
+
+    await editarDesde('Netflix', { detalle: 'Netflix', importe: 9500 });
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(getStoredState().gastos.map(g => g.mes)).toEqual([5, 6]);
+    expect(getStoredState().recurrentes[0].importe).toBe(9500);
+    confirm.mockRestore();
   });
 
   it('conserva los gastos que el usuario editó a mano', async () => {
     await bootApp(conMesesGenerados());
-
     // Corregir el importe de enero lo convierte en un gasto que el usuario quiso.
     editarGastoDeEnero({ importe: 12000 });
 
+    // El cartel nombra sólo los que se van, no los que se conservan.
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     await editarDesde('Netflix', { detalle: 'Netflix', desde: 5 });
+    expect(confirm.mock.calls[0][0]).toContain('4 gastos');
+    confirm.mockRestore();
 
     const s = getStoredState();
     expect(s.gastos.map(g => g.mes).sort((a, b) => a - b)).toEqual([0, 5, 6]);

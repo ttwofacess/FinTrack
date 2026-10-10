@@ -14,7 +14,8 @@ import { renderPresupuesto, initPresupuestoEvents, initMetaModal } from './presu
 import { renderIngresos, initIngresoModal, initIngresosControls } from './ingresos.js';
 import { initDataIO }                                from './dataIO.js';
 import { initDonateModal }                           from './donate.js';
-import { ensureMonthRecurrentes, sincronizarImporteBase, registrarSalteo, recortarMesesAntes,
+import { ensureMonthRecurrentes, sincronizarImporteBase, registrarSalteo,
+         gastosAntesDe, recortarMesesAntes,
          initRecurrentesModal, initRecurrentesEvents } from './recurrentes.js';
 import { validateGasto, validateIngreso, validateBudgetUpdate, validateMetaAhorro, validateRecurrente, uid } from './utils.js';
 
@@ -276,6 +277,23 @@ function renderPresupuestoActual() {
 }
 
 /**
+ * El cartel que precede al borrado de los gastos que quedan fuera del nuevo
+ * "desde". Nombra los meses afectados para que la decisión sea informada: borrar
+ * "un gasto" de un mes que el usuario recuerda haber pagado es distinto a
+ * borrar cinco de un error de carga.
+ */
+function confirmarBorrado(recurrente, aBorrar) {
+  const meses = [...new Set(aBorrar.map(g => MESES[g.mes]))];
+  const plural = aBorrar.length > 1;
+  const detalle = meses.length > 3 ? `${meses.slice(0, 3).join(', ')} y ${meses.length - 3} más`
+    : meses.join(' y ');
+
+  return confirm(`"${recurrente.detalle}" va a empezar en ${MESES[recurrente.desdeMes]} y eso elimina `
+    + `${aBorrar.length} gasto${plural ? 's' : ''} de ${detalle}. `
+    + 'Los que editaste a mano se conservan. ¿Continuar?');
+}
+
+/**
  * @param {object} rec — { detalle, importe, categoria, medio, desdeMes, activo,
  *   id?, _edit?, _aplicarMes? }
  */
@@ -294,6 +312,15 @@ function onRecurrenteSave(rec) {
 
   const limpio = { ...existente, ...result.data, id: id || uid() };
 
+  // Adelantar el "desde" deja fuera los gastos generados antes de ese mes. Eso
+  // borra datos que el usuario puede reconocer como reales (un pago de enero que
+  // sí ocurrió), así que se pregunta antes de tocar nada: si cancela, no se
+  // aplica ningún cambio, ni al recurrente ni a los gastos.
+  const seAdelanta = Boolean(existente) && limpio.desdeMes > existente.desdeMes;
+  const aBorrar = seAdelanta ? gastosAntesDe(STATE, limpio.id, limpio.desdeMes) : [];
+
+  if (aBorrar.length > 0 && !confirmarBorrado(limpio, aBorrar)) return;
+
   if (_edit) {
     const idx = STATE.recurrentes.findIndex(r => r.id === limpio.id);
     if (idx < 0) return;
@@ -309,11 +336,7 @@ function onRecurrenteSave(rec) {
     if (delMes) delMes.importe = limpio.importe;
   }
 
-  // Adelantar el "desde" es una corrección retroactiva: lo generado antes ya no
-  // corresponde y se va, salvo lo que el usuario editó a mano.
-  const eliminados = (existente && limpio.desdeMes > existente.desdeMes)
-    ? recortarMesesAntes(STATE, limpio.id, limpio.desdeMes)
-    : 0;
+  const eliminados = recortarMesesAntes(STATE, limpio.id, limpio.desdeMes);
 
   const persisted = saveS();
 

@@ -3,6 +3,7 @@ import {
   ensureMonthRecurrentes,
   sincronizarImporteBase,
   registrarSalteo,
+  gastosAntesDe,
   recortarMesesAntes,
 } from '../recurrentes.js';
 
@@ -298,6 +299,28 @@ describe('registrarSalteo', () => {
     s.gastos = s.gastos.filter(g => g.id !== 'g1');
     expect(ensureMonthRecurrentes(s, 3, OCTUBRE)).toBe(0);
     expect(ensureMonthRecurrentes(s, 4, OCTUBRE)).toBe(1);
+  });
+});
+
+describe('gastosAntesDe', () => {
+  it('lista los intactos anteriores al nuevo desdeMes sin tocar el estado', () => {
+    const s = estado([recurrente({ desdeMes: 5 })], [
+      { id: 'g1', importe: 8500, mes: 0, recurrenteId: 'r1' },
+      { id: 'g2', importe: 8500, mes: 4, recurrenteId: 'r1', editado: true },
+      { id: 'g3', importe: 8500, mes: 5, recurrenteId: 'r1' },
+      { id: 'otro', importe: 100, mes: 1 },
+    ]);
+
+    expect(gastosAntesDe(s, 'r1', 5).map(g => g.id)).toEqual(['g1']);
+    expect(s.gastos).toHaveLength(4);
+  });
+
+  it('devuelve una lista vacía si no hay nada que borrar', () => {
+    const s = estado([recurrente()], [{ id: 'g1', importe: 1, mes: 5, recurrenteId: 'r1' }]);
+
+    expect(gastosAntesDe(s, 'r1', 5)).toEqual([]);
+    expect(gastosAntesDe(null, 'r1', 5)).toEqual([]);
+    expect(gastosAntesDe({ gastos: [] }, 'r1', 5)).toEqual([]);
   });
 });
 
